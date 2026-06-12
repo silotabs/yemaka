@@ -142,9 +142,6 @@ go run ./cmd/yemaka serve
 - [Public beta notes](docs/public-beta.md)
 - [Release checklist](docs/release.md)
 - [Troubleshooting](docs/troubleshooting.md)
-<!-- - [Product blueprint](docs/blueprint.md)
-- [Roadmap](docs/roadmap.md)
-- [Implementation status](docs/implementation-status.md) -->
 - [Distribution notes](docs/distribution.md)
 
 ## License
