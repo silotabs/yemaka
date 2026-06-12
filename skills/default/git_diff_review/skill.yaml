@@ -1,0 +1,17 @@
+name: git_diff_review
+version: 0.1.0
+description: Review a git diff for bugs, regressions, and missing tests.
+triggers:
+  - git diff
+  - review my diff
+  - review the diff
+required_tools:
+  - git_diff
+permissions:
+  filesystem_read: true
+  filesystem_write: ""
+  shell: limited
+  network: false
+context_budget:
+  max_instruction_chars: 2000
+  max_examples: 0

@@ -1,0 +1,6 @@
+tests:
+  - name: code_note_review_from_local_context
+    prompt: Review these local coding notes and list API questions.
+    want_tools:
+      - rag_search
+      - memory_search

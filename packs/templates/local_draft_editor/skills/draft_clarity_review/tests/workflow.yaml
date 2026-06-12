@@ -1,0 +1,6 @@
+tests:
+  - name: draft_clarity_review_from_local_context
+    prompt: Review this draft for clarity and make it more concise.
+    want_tools:
+      - rag_search
+      - memory_search

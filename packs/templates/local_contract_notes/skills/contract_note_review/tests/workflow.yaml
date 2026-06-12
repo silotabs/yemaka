@@ -1,0 +1,6 @@
+tests:
+  - name: contract_note_review_from_local_context
+    prompt: Review these contract notes and list questions.
+    want_tools:
+      - rag_search
+      - memory_search

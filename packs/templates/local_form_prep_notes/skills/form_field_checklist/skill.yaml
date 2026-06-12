@@ -1,0 +1,18 @@
+name: form_field_checklist
+version: 0.1.0
+description: Turn pasted or local form context into a field checklist, missing details, assumptions, and review questions.
+triggers:
+  - form field checklist
+  - form prep checklist
+  - missing form fields
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  filesystem_read: false
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1800
+  max_examples: 1

@@ -1,0 +1,48 @@
+name: local_file_triage
+version: 0.1.0
+description: Read-only local workspace triage workflows for inventory, cleanup planning, and folder-structure planning.
+category: workspace
+skills:
+  - skills/file_inventory
+  - skills/cleanup_plan
+  - skills/folder_structure_plan
+required_tools:
+  - file_tree
+  - file_stat
+  - search_files
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+    scopes:
+      - read
+    paths:
+      - workspace://
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - edit_file
+    - write_file
+    - memory_write
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+  sensitive_data_rules:
+    - Inspect only workspace metadata and user-provided context.
+    - Propose file moves, deletions, or renames only as a written plan; never perform them.
+    - Avoid repeating sensitive filenames or snippets unless necessary for the user's requested triage.
+tests:
+  - skills/file_inventory/tests/workflow.yaml
+  - skills/cleanup_plan/tests/workflow.yaml
+  - skills/folder_structure_plan/tests/workflow.yaml
+default_state: disabled

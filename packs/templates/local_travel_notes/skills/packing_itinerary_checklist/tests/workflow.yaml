@@ -1,0 +1,6 @@
+tests:
+  - name: packing_itinerary_checklist_from_local_context
+    prompt: Make a packing checklist from my local travel notes.
+    want_tools:
+      - rag_search
+      - memory_search

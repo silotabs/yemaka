@@ -1,0 +1,6 @@
+tests:
+  - name: knowledge_base_faq_from_local_context
+    prompt: Create a local knowledge base FAQ from my ingested docs.
+    want_tools:
+      - rag_search
+      - memory_search

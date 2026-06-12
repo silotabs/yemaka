@@ -1,0 +1,43 @@
+name: local_knowledge_base
+version: 0.1.0
+description: Local knowledge-base workflows for organizing ingested documents, notes, topics, source-backed FAQs, glossary items, and review questions from local context.
+category: knowledge_base
+skills:
+  - skills/knowledge_base_faq
+  - skills/topic_index_review
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - memory_write
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+    - edit_file
+    - write_file
+  sensitive_data_rules:
+    - Use only pasted notes, local memory, and ingested local documents.
+    - Present FAQs, topic indexes, source-backed summaries, glossary items, gaps, and review questions only.
+    - Do not create databases, knowledge graphs, embedding indexes, vector stores, files, PDFs, exports, sync jobs, connectors, or scheduled refreshes.
+    - Do not browse for current external facts or claim coverage beyond the provided local sources.
+    - Avoid repeating secrets, credentials, private identifiers, personal contact details, account details, or confidential source text unless required for the requested review.
+tests:
+  - skills/knowledge_base_faq/tests/workflow.yaml
+  - skills/topic_index_review/tests/workflow.yaml
+default_state: disabled

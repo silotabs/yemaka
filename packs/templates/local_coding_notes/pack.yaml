@@ -1,0 +1,42 @@
+name: local_coding_notes
+version: 0.1.0
+description: Local coding-note workflows for organizing pasted or ingested developer notes, API notes, error notes, assumptions, and review questions from local context.
+category: coding_notes
+skills:
+  - skills/code_note_review
+  - skills/error_note_checklist
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - memory_write
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+    - edit_file
+    - write_file
+  sensitive_data_rules:
+    - Use only pasted developer notes, local memory, and ingested local documents.
+    - Present code-note summaries, API notes, error-note checklists, assumptions, gaps, and review questions only.
+    - Do not read workspace files directly, edit files, write code into files, run tests, run commands, install dependencies, use git, build, deploy, fetch remote docs, or create generated extensions.
+    - Do not capture secrets, tokens, private repository URLs, credentials, customer data, or proprietary source text unless required for the requested review.
+tests:
+  - skills/code_note_review/tests/workflow.yaml
+  - skills/error_note_checklist/tests/workflow.yaml
+default_state: disabled

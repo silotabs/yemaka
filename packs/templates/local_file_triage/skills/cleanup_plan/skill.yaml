@@ -1,0 +1,19 @@
+name: cleanup_plan
+version: 0.1.0
+description: Draft a read-only cleanup plan for local files without changing the workspace.
+triggers:
+  - propose file cleanup
+  - find duplicate-looking files
+  - organize local files
+required_tools:
+  - file_tree
+  - file_stat
+  - search_files
+permissions:
+  filesystem_read: true
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1800
+  max_examples: 1

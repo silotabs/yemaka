@@ -1,0 +1,6 @@
+tests:
+  - name: trip_note_brief_from_local_context
+    prompt: Summarize these trip notes into an itinerary checklist.
+    want_tools:
+      - rag_search
+      - memory_search

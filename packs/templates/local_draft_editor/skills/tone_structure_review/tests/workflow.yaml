@@ -1,0 +1,6 @@
+tests:
+  - name: tone_structure_review_from_local_context
+    prompt: Give me a tone and structure review for this local draft.
+    want_tools:
+      - rag_search
+      - memory_search

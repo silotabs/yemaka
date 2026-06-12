@@ -1,0 +1,18 @@
+name: topic_index_review
+version: 0.1.0
+description: Organize local documents into topics, glossary items, source hints, gaps, and questions.
+triggers:
+  - topic index from local docs
+  - local topic index
+  - knowledge base topic review
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  filesystem_read: false
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1800
+  max_examples: 1

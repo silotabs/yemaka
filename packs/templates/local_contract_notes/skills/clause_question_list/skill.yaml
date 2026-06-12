@@ -1,0 +1,18 @@
+name: clause_question_list
+version: 0.1.0
+description: Turn contract clauses into plain-language review questions, assumptions, and missing-context notes.
+triggers:
+  - clause question list
+  - contract clause questions
+  - terms checklist
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  filesystem_read: false
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1800
+  max_examples: 1

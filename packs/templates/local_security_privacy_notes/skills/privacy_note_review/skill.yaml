@@ -1,0 +1,18 @@
+name: privacy_note_review
+version: 0.1.0
+description: Review privacy settings notes, data-sharing concerns, and local policy notes into a user-review checklist.
+triggers:
+  - privacy note review
+  - review privacy notes
+  - data sharing checklist
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  filesystem_read: false
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1800
+  max_examples: 1

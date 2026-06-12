@@ -1,0 +1,17 @@
+name: daily_planner
+version: 0.1.0
+description: Build a compact local day plan from remembered commitments and current priorities.
+triggers:
+  - plan my day
+  - daily plan
+  - prioritize today's tasks
+required_tools:
+  - memory_search
+permissions:
+  filesystem_read: false
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1600
+  max_examples: 1

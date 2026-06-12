@@ -1,0 +1,6 @@
+tests:
+  - name: campaign_idea_review_from_local_context
+    prompt: Review these content ideas and group them by theme.
+    want_tools:
+      - rag_search
+      - memory_search

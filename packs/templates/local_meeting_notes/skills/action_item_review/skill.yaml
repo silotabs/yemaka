@@ -1,0 +1,18 @@
+name: action_item_review
+version: 0.1.0
+description: Extract action items, owners, dates, blockers, and review questions from local notes.
+triggers:
+  - extract action items
+  - review follow ups
+  - find meeting blockers
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  filesystem_read: false
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1700
+  max_examples: 1

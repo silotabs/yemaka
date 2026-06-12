@@ -1,0 +1,18 @@
+name: project_status_brief
+version: 0.1.0
+description: Produce a compact local project status brief from user-provided context, ingested documents, and local memory.
+triggers:
+  - project status brief
+  - summarize project status
+  - local project update
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  filesystem_read: false
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1800
+  max_examples: 1

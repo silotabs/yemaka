@@ -1,0 +1,43 @@
+name: local_customer_support_notes
+version: 0.1.0
+description: Local customer-support note workflows for summarizing tickets, reviewing reply quality, and preparing reviewable support drafts from user-provided or ingested context.
+category: customer_support_notes
+skills:
+  - skills/support_ticket_summary
+  - skills/reply_quality_review
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+    - memory_write
+    - edit_file
+    - write_file
+  sensitive_data_rules:
+    - Use only pasted ticket text, local memory, and ingested local support documents.
+    - Return ticket summaries, reply drafts, quality review notes, missing details, and suggested next-step wording only.
+    - Do not send messages, update tickets, contact customers, connect to helpdesk systems, schedule follow-ups, update files, or store customer details.
+    - Treat all outputs as draft or review material for the user to verify and send manually.
+    - Avoid repeating customer names, contact details, account identifiers, payment details, addresses, order numbers, or private support history unless required for the requested review.
+tests:
+  - skills/support_ticket_summary/tests/workflow.yaml
+  - skills/reply_quality_review/tests/workflow.yaml
+default_state: disabled

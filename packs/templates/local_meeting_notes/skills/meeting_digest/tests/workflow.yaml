@@ -1,0 +1,6 @@
+tests:
+  - name: meeting_digest_from_local_notes
+    prompt: Summarize the local meeting notes about the release review and list decisions.
+    want_tools:
+      - rag_search
+      - memory_search

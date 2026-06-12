@@ -1,0 +1,6 @@
+tests:
+  - name: table_note_summary_from_local_context
+    prompt: Summarize these table notes and identify repeated items.
+    want_tools:
+      - rag_search
+      - memory_search

@@ -1,0 +1,44 @@
+name: local_project_brief
+version: 0.1.0
+description: Local project briefing workflows for status, risks, blockers, milestones, and next steps from user-provided or ingested project context.
+category: project
+skills:
+  - skills/project_status_brief
+  - skills/risk_blocker_review
+  - skills/milestone_plan_review
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - memory_write
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+    - edit_file
+    - write_file
+  sensitive_data_rules:
+    - Use only pasted project context, local memory, and ingested local documents.
+    - Present project status, risks, blockers, milestones, and next steps as a reviewable brief only.
+    - Do not assign work, create tickets, update boards, schedule deadlines, send status updates, store project details, contact details, secrets, timelines, or commitments.
+    - Mark unsupported conclusions as assumptions instead of filling gaps.
+tests:
+  - skills/project_status_brief/tests/workflow.yaml
+  - skills/risk_blocker_review/tests/workflow.yaml
+  - skills/milestone_plan_review/tests/workflow.yaml
+default_state: disabled

@@ -1,0 +1,6 @@
+tests:
+  - name: project_status_brief_from_local_context
+    prompt: Give me a local project status brief from the ingested project notes.
+    want_tools:
+      - rag_search
+      - memory_search

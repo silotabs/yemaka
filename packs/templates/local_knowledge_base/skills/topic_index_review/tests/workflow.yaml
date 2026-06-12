@@ -1,0 +1,6 @@
+tests:
+  - name: topic_index_review_from_local_context
+    prompt: Turn these local notes into a topic index with source hints.
+    want_tools:
+      - rag_search
+      - memory_search

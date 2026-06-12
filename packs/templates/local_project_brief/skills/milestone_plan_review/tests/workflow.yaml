@@ -1,0 +1,6 @@
+tests:
+  - name: milestone_plan_review_from_local_context
+    prompt: Draft a milestone review plan from my local project notes without assigning work.
+    want_tools:
+      - rag_search
+      - memory_search

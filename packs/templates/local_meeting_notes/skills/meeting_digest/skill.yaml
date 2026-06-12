@@ -1,0 +1,18 @@
+name: meeting_digest
+version: 0.1.0
+description: Create a compact meeting digest from pasted notes, local documents, and local memory.
+triggers:
+  - summarize meeting notes
+  - meeting digest
+  - summarize this transcript
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  filesystem_read: false
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1800
+  max_examples: 1

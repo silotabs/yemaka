@@ -1,0 +1,43 @@
+name: local_form_prep_notes
+version: 0.1.0
+description: Local form-prep workflows for organizing form fields, document-prep notes, application context, missing details, and review questions from user-provided or ingested context.
+category: form_prep_notes
+skills:
+  - skills/form_field_checklist
+  - skills/document_prep_review
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - memory_write
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+    - edit_file
+    - write_file
+  sensitive_data_rules:
+    - Use only pasted form notes, local memory, and ingested local documents.
+    - Present field checklists, missing details, questions, assumptions, and review notes only.
+    - Do not fill, sign, submit, upload, email, mail, file, generate PDFs, update files, schedule reminders, contact services, or store form details.
+    - Do not provide legal, tax, medical, immigration, financial, benefits, eligibility, or compliance decisions.
+    - Avoid repeating identity numbers, passport numbers, account numbers, payment details, addresses, dates of birth, contact details, or other sensitive fields unless required for the requested review.
+tests:
+  - skills/form_field_checklist/tests/workflow.yaml
+  - skills/document_prep_review/tests/workflow.yaml
+default_state: disabled

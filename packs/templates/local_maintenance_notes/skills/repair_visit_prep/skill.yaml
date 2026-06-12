@@ -1,0 +1,18 @@
+name: repair_visit_prep
+version: 0.1.0
+description: Prepare a repair visit from pasted or local maintenance notes with issue summaries, questions, supplies, access reminders, and professional-caution notes.
+triggers:
+  - repair visit prep
+  - prepare for technician visit
+  - maintenance appointment checklist
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  filesystem_read: false
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1800
+  max_examples: 1

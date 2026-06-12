@@ -1,0 +1,43 @@
+name: local_maintenance_notes
+version: 0.1.0
+description: Local maintenance-note workflows for reviewing maintenance logs, organizing repair context, preparing visit questions, supplies, access notes, and professional-caution reminders from user-provided or ingested context.
+category: maintenance_notes
+skills:
+  - skills/maintenance_log_review
+  - skills/repair_visit_prep
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - memory_write
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+    - edit_file
+    - write_file
+  sensitive_data_rules:
+    - Use only pasted maintenance notes, local memory, and ingested local documents.
+    - Present issue summaries, timelines, questions, supplies, access notes, and when-to-call-professional cautions only.
+    - Do not provide hazardous repair instructions, bypass safety devices, or guide work on energized electrical, gas, pressurized plumbing, structural, roofing, or other dangerous systems.
+    - Do not diagnose hidden failures, guarantee safety, schedule visits, contact providers, buy supplies, update files, store maintenance details, or dispatch services.
+    - Avoid repeating addresses, access codes, account numbers, warranty numbers, tenant details, contact details, payment details, or serial numbers unless required for the requested review.
+tests:
+  - skills/maintenance_log_review/tests/workflow.yaml
+  - skills/repair_visit_prep/tests/workflow.yaml
+default_state: disabled

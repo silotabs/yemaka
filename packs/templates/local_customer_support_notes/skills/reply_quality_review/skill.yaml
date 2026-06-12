@@ -1,0 +1,18 @@
+name: reply_quality_review
+version: 0.1.0
+description: Review a customer support reply draft for clarity, empathy, factual support, policy fit, and escalation risks.
+triggers:
+  - reply quality review
+  - review this support reply
+  - check this customer reply
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  filesystem_read: false
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1800
+  max_examples: 1

@@ -1,0 +1,6 @@
+tests:
+  - name: budget_note_review_from_local_context
+    prompt: Review these budget notes and summarize expense categories.
+    want_tools:
+      - rag_search
+      - memory_search

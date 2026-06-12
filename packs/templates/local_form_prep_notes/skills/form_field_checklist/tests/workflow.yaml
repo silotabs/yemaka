@@ -1,0 +1,6 @@
+tests:
+  - name: form_field_checklist_from_local_context
+    prompt: Make a form field checklist from these local notes.
+    want_tools:
+      - rag_search
+      - memory_search

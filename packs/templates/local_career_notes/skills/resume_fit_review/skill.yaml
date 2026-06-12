@@ -1,0 +1,18 @@
+name: resume_fit_review
+version: 0.1.0
+description: Compare local resume notes with a role description and list fit signals, gaps, questions, and evidence.
+triggers:
+  - resume fit review
+  - compare resume notes
+  - review role fit
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  filesystem_read: false
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1800
+  max_examples: 1

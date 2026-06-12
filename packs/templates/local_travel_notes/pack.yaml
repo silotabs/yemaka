@@ -1,0 +1,43 @@
+name: local_travel_notes
+version: 0.1.0
+description: Local travel-note workflows for organizing itinerary notes, packing notes, trip constraints, local documents, and questions from user-provided or ingested context.
+category: travel_notes
+skills:
+  - skills/trip_note_brief
+  - skills/packing_itinerary_checklist
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - memory_write
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+    - edit_file
+    - write_file
+  sensitive_data_rules:
+    - Use only pasted travel notes, local memory, and ingested local documents.
+    - Present itinerary summaries, packing checklists, constraints, questions, and review notes only.
+    - Do not book travel, cancel reservations, pay for travel, contact providers, send itineraries, schedule reminders, update files, or store travel details.
+    - Do not provide visa, immigration, legal, health, safety, weather, live price, availability, or current travel-advisory guidance from stale local context.
+    - Avoid repeating passport numbers, addresses, booking references, payment details, identity details, or exact travel dates unless required for the requested review.
+tests:
+  - skills/trip_note_brief/tests/workflow.yaml
+  - skills/packing_itinerary_checklist/tests/workflow.yaml
+default_state: disabled

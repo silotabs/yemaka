@@ -1,0 +1,6 @@
+tests:
+  - name: client_call_brief_from_local_context
+    prompt: Prepare a client call brief from these local account notes.
+    want_tools:
+      - rag_search
+      - memory_search

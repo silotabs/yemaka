@@ -1,0 +1,42 @@
+name: local_draft_editor
+version: 0.1.0
+description: Local draft review workflows for clarity, tone, structure, and concise rewrites from user-provided or ingested draft context.
+category: drafting
+skills:
+  - skills/draft_clarity_review
+  - skills/tone_structure_review
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - memory_write
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+    - edit_file
+    - write_file
+  sensitive_data_rules:
+    - Use only pasted draft text, local memory, and ingested local documents.
+    - Present revised text and suggestions as reviewable output only.
+    - Do not save drafts, update files, store preferences, or send messages.
+    - Preserve the user's meaning and label substantial assumptions or missing context.
+tests:
+  - skills/draft_clarity_review/tests/workflow.yaml
+  - skills/tone_structure_review/tests/workflow.yaml
+default_state: disabled

@@ -1,0 +1,19 @@
+name: folder_structure_plan
+version: 0.1.0
+description: Draft a read-only folder organization plan for local workspace files without moving, renaming, deleting, or creating files.
+triggers:
+  - folder organization plan
+  - organize local folders
+  - workspace structure plan
+required_tools:
+  - file_tree
+  - file_stat
+  - search_files
+permissions:
+  filesystem_read: true
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1800
+  max_examples: 1

@@ -1,0 +1,7 @@
+tests:
+  - name: folder_structure_plan_read_only
+    prompt: Propose a folder organization plan for my workspace without changing files.
+    want_tools:
+      - file_tree
+      - file_stat
+      - search_files

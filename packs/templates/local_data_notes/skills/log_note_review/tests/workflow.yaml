@@ -1,0 +1,6 @@
+tests:
+  - name: log_note_review_from_local_context
+    prompt: Review these log-style notes for patterns, gaps, and follow-up questions.
+    want_tools:
+      - rag_search
+      - memory_search

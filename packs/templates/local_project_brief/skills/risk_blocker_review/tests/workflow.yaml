@@ -1,0 +1,6 @@
+tests:
+  - name: risk_blocker_review_from_local_context
+    prompt: Review the local release notes and list blockers, risks, and next steps.
+    want_tools:
+      - rag_search
+      - memory_search

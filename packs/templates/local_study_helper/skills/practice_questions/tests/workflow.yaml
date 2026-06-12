@@ -1,0 +1,6 @@
+tests:
+  - name: practice_questions_from_local_notes
+    prompt: Create practice questions from my local notes about routing corrections.
+    want_tools:
+      - rag_search
+      - memory_search

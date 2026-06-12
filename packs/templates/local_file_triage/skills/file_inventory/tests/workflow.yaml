@@ -1,0 +1,7 @@
+tests:
+  - name: read_only_file_inventory
+    prompt: Triage my workspace files and group what needs review.
+    want_tools:
+      - file_tree
+      - file_stat
+      - search_files

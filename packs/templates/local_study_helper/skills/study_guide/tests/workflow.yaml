@@ -1,0 +1,6 @@
+tests:
+  - name: study_guide_from_local_notes
+    prompt: Make a study guide from my local notes about memory and RAG.
+    want_tools:
+      - rag_search
+      - memory_search

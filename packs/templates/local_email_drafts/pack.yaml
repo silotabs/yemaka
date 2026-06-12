@@ -1,0 +1,42 @@
+name: local_email_drafts
+version: 0.1.0
+description: Local email and message drafting workflows for replies, tone, structure, and reviewable communication drafts from user-provided or ingested context.
+category: communication_drafts
+skills:
+  - skills/email_draft_review
+  - skills/reply_tone_review
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - memory_write
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+    - edit_file
+    - write_file
+  sensitive_data_rules:
+    - Use only pasted message text, local memory, and ingested local documents.
+    - Return reviewable draft text, tone notes, and suggested subject lines only.
+    - Do not send messages, open email clients, search inboxes, use connectors, schedule follow-ups, update files, or store contact details.
+    - Avoid repeating private email addresses, phone numbers, personal details, or confidential message content unless required for the requested draft.
+tests:
+  - skills/email_draft_review/tests/workflow.yaml
+  - skills/reply_tone_review/tests/workflow.yaml
+default_state: disabled

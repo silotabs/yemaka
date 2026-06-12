@@ -1,0 +1,6 @@
+tests:
+  - name: clause_question_list_from_local_context
+    prompt: Turn these clauses into plain-language review notes.
+    want_tools:
+      - rag_search
+      - memory_search

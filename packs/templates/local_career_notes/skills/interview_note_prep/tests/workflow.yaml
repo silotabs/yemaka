@@ -1,0 +1,6 @@
+tests:
+  - name: interview_note_prep_from_local_context
+    prompt: Review my interview notes and suggest preparation questions.
+    want_tools:
+      - rag_search
+      - memory_search

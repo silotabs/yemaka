@@ -1,0 +1,6 @@
+tests:
+  - name: content_calendar_outline_from_local_context
+    prompt: Create a content calendar outline from my local campaign notes.
+    want_tools:
+      - rag_search
+      - memory_search

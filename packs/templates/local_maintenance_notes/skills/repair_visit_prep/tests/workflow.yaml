@@ -1,0 +1,6 @@
+tests:
+  - name: repair_visit_prep_from_local_context
+    prompt: Prepare a repair visit checklist from these local notes.
+    want_tools:
+      - rag_search
+      - memory_search

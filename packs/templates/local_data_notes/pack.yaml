@@ -1,0 +1,42 @@
+name: local_data_notes
+version: 0.1.0
+description: Local note-review workflows for tabular notes, simple lists, records, and log-style notes from user-provided or ingested context.
+category: data_notes
+skills:
+  - skills/table_note_summary
+  - skills/log_note_review
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - memory_write
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+    - edit_file
+    - write_file
+  sensitive_data_rules:
+    - Use only pasted note data, local memory, and ingested local documents.
+    - Present summaries, patterns, anomalies, and questions as reviewable notes only.
+    - Do not create files, update files, store data, run commands, or inspect live systems.
+    - Label inferred groupings or patterns as assumptions when local evidence is incomplete.
+tests:
+  - skills/table_note_summary/tests/workflow.yaml
+  - skills/log_note_review/tests/workflow.yaml
+default_state: disabled

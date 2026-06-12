@@ -1,0 +1,7 @@
+tests:
+  - name: read_only_cleanup_plan
+    prompt: Make a cleanup plan for duplicate-looking notes and old drafts, but do not change anything.
+    want_tools:
+      - file_tree
+      - file_stat
+      - search_files

@@ -1,0 +1,43 @@
+name: local_content_calendar_notes
+version: 0.1.0
+description: Local content-calendar workflows for organizing campaign notes, content ideas, themes, draft calendar outlines, and questions from user-provided or ingested context.
+category: content_calendar_notes
+skills:
+  - skills/content_calendar_outline
+  - skills/campaign_idea_review
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - memory_write
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+    - edit_file
+    - write_file
+  sensitive_data_rules:
+    - Use only pasted content notes, local memory, and ingested local documents.
+    - Present calendar outlines, themes, draft copy ideas, questions, and review notes only.
+    - Do not post, publish, send newsletters, schedule posts, contact audiences, generate media assets, update files, or store campaign details.
+    - Do not claim current trends, platform rules, ad-policy compliance, legal clearance, or brand approval from stale local context.
+    - Avoid repeating private customer details, contact lists, unreleased campaign details, or business-sensitive metrics unless required for the requested review.
+tests:
+  - skills/content_calendar_outline/tests/workflow.yaml
+  - skills/campaign_idea_review/tests/workflow.yaml
+default_state: disabled

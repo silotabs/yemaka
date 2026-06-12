@@ -1,0 +1,18 @@
+name: campaign_idea_review
+version: 0.1.0
+description: Review local content ideas for themes, audience fit, unclear claims, missing context, and draft next steps.
+triggers:
+  - campaign idea review
+  - review content ideas
+  - group campaign ideas
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  filesystem_read: false
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1800
+  max_examples: 1

@@ -1,0 +1,41 @@
+name: local_meeting_notes
+version: 0.1.0
+description: Local meeting and notes workflows for summaries, decisions, and action-item extraction.
+category: productivity
+skills:
+  - skills/meeting_digest
+  - skills/action_item_review
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - memory_write
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+    - edit_file
+    - write_file
+  sensitive_data_rules:
+    - Use only pasted notes, local memory, and ingested local documents.
+    - Do not save action items or decisions to memory; present them as a reviewable draft only.
+    - Avoid repeating sensitive names or private details unless they are needed for the user's requested meeting summary.
+tests:
+  - skills/meeting_digest/tests/workflow.yaml
+  - skills/action_item_review/tests/workflow.yaml
+default_state: disabled

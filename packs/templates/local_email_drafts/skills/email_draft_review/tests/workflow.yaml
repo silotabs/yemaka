@@ -1,0 +1,6 @@
+tests:
+  - name: email_draft_from_local_context
+    prompt: Draft a polite email from these notes.
+    want_tools:
+      - rag_search
+      - memory_search

@@ -1,0 +1,6 @@
+tests:
+  - name: local_source_brief
+    prompt: Build a source-backed brief from my local documents about extension rollback.
+    want_tools:
+      - rag_search
+      - memory_search

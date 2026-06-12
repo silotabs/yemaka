@@ -1,0 +1,6 @@
+tests:
+  - name: appointment_note_prep_from_local_context
+    prompt: Organize these appointment notes and list questions for my doctor.
+    want_tools:
+      - rag_search
+      - memory_search

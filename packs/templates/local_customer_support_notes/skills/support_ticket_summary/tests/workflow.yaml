@@ -1,0 +1,6 @@
+tests:
+  - name: support_ticket_summary_from_local_context
+    prompt: Summarize this support ticket into issue, facts, missing details, and next steps.
+    want_tools:
+      - rag_search
+      - memory_search

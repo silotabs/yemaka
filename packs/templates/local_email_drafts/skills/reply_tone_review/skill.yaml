@@ -1,0 +1,18 @@
+name: reply_tone_review
+version: 0.1.0
+description: Review a reply draft for tone, clarity, audience fit, boundaries, and concise structure.
+triggers:
+  - reply tone review
+  - review this reply
+  - make this email professional
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  filesystem_read: false
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1800
+  max_examples: 1

@@ -1,0 +1,6 @@
+tests:
+  - name: reply_quality_review_from_local_context
+    prompt: Review this customer support reply before I send it myself.
+    want_tools:
+      - rag_search
+      - memory_search

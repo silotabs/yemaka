@@ -1,0 +1,18 @@
+name: packing_itinerary_checklist
+version: 0.1.0
+description: Organize local packing notes and itinerary context into a manual checklist and missing-detail questions.
+triggers:
+  - packing itinerary checklist
+  - packing checklist from notes
+  - travel checklist
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  filesystem_read: false
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1800
+  max_examples: 1

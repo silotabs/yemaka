@@ -1,0 +1,43 @@
+name: local_sales_client_notes
+version: 0.1.0
+description: Local sales and client-note workflows for call briefs, proposal follow-up review, risks, questions, and evidence from user-provided or ingested client context.
+category: sales_client_notes
+skills:
+  - skills/client_call_brief
+  - skills/proposal_followup_review
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+    - memory_write
+    - edit_file
+    - write_file
+  sensitive_data_rules:
+    - Use only pasted sales/client notes, local memory, and ingested local documents.
+    - Present client call briefs, proposal follow-up reviews, questions, and risks as reviewable notes only.
+    - Do not send outreach, contact clients, use connectors, schedule follow-ups, update files, write memory, or store client/contact details.
+    - Do not claim current market, company, account, prospect, pricing, or competitor facts unless they are explicitly present in the provided or local evidence.
+    - Label unsupported conclusions as assumptions instead of filling gaps.
+tests:
+  - skills/client_call_brief/tests/workflow.yaml
+  - skills/proposal_followup_review/tests/workflow.yaml
+default_state: disabled

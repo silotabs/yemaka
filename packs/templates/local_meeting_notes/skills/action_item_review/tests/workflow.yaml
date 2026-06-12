@@ -1,0 +1,6 @@
+tests:
+  - name: action_items_from_local_notes
+    prompt: Extract action items and blockers from the local planning notes.
+    want_tools:
+      - rag_search
+      - memory_search

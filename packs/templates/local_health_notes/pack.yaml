@@ -1,0 +1,42 @@
+name: local_health_notes
+version: 0.1.0
+description: Local health-note workflows for appointment preparation, symptom notes, medication notes, and clinician questions from user-provided or ingested context.
+category: health_notes
+skills:
+  - skills/appointment_note_prep
+  - skills/health_question_review
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - memory_write
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+    - edit_file
+    - write_file
+  sensitive_data_rules:
+    - Use only pasted health notes, local memory, and ingested local documents.
+    - Organize notes and questions for review with a qualified clinician only.
+    - Do not diagnose, recommend treatment, triage emergencies, store health details, send messages, schedule reminders, or update files.
+    - For urgent, severe, or emergency-sounding symptoms, tell the user to seek urgent medical care or local emergency services.
+tests:
+  - skills/appointment_note_prep/tests/workflow.yaml
+  - skills/health_question_review/tests/workflow.yaml
+default_state: disabled

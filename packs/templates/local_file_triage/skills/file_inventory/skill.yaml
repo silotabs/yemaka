@@ -1,0 +1,19 @@
+name: file_inventory
+version: 0.1.0
+description: Build a read-only inventory of local workspace files and review groups.
+triggers:
+  - triage workspace files
+  - inventory local files
+  - map file cleanup candidates
+required_tools:
+  - file_tree
+  - file_stat
+  - search_files
+permissions:
+  filesystem_read: true
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1700
+  max_examples: 1

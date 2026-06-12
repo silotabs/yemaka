@@ -1,0 +1,18 @@
+name: project_explainer
+version: 0.1.0
+description: Explain a local project using compact workspace context.
+triggers:
+  - explain this project
+  - explain this codebase
+  - project structure
+required_tools:
+  - workspace_summary
+  - read_file
+permissions:
+  filesystem_read: true
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1800
+  max_examples: 0

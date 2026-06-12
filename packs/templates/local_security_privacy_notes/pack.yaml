@@ -1,0 +1,43 @@
+name: local_security_privacy_notes
+version: 0.1.0
+description: Local privacy and account-hygiene note workflows for organizing user-provided settings notes, data-sharing concerns, and account-safety questions.
+category: privacy_hygiene
+skills:
+  - skills/privacy_note_review
+  - skills/account_hygiene_checklist
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - memory_write
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+    - edit_file
+    - write_file
+  sensitive_data_rules:
+    - Use only pasted privacy notes, local memory, and ingested local documents.
+    - Present checklists, questions, and review notes only; do not change settings or contact services.
+    - Do not request, store, repeat, export, or infer passwords, tokens, recovery codes, API keys, or other secrets.
+    - Do not perform vulnerability scans, penetration testing, recon, network checks, device inspection, shell commands, or live security assessment.
+    - If the user reports active compromise, tell them to use official account-recovery channels and avoid sharing secrets.
+tests:
+  - skills/privacy_note_review/tests/workflow.yaml
+  - skills/account_hygiene_checklist/tests/workflow.yaml
+default_state: disabled

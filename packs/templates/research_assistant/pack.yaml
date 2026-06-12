@@ -1,0 +1,37 @@
+name: research_assistant
+version: 0.1.0
+description: Local source-backed research workflows for briefs and claim checks.
+category: research
+skills:
+  - skills/source_brief
+  - skills/claim_check
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+  sensitive_data_rules:
+    - Use only user-provided context, local memory, and ingested local documents.
+    - Do not store research findings or sensitive details unless the user explicitly asks through a separate memory workflow.
+    - Label unsupported claims instead of filling gaps with guesses.
+tests:
+  - skills/source_brief/tests/workflow.yaml
+  - skills/claim_check/tests/workflow.yaml
+default_state: disabled

@@ -1,0 +1,42 @@
+name: local_career_notes
+version: 0.1.0
+description: Local career-note workflows for resume notes, role descriptions, interview notes, fit gaps, and preparation questions from user-provided or ingested context.
+category: career_notes
+skills:
+  - skills/resume_fit_review
+  - skills/interview_note_prep
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - memory_write
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+    - edit_file
+    - write_file
+  sensitive_data_rules:
+    - Use only pasted career notes, local memory, and ingested local documents.
+    - Present fit summaries, preparation notes, and questions as reviewable notes only.
+    - Do not apply for roles, search the web, contact people, send messages, update files, or store personal details.
+    - Avoid repeating private contact details, salary details, or identity details unless needed for the requested review.
+tests:
+  - skills/resume_fit_review/tests/workflow.yaml
+  - skills/interview_note_prep/tests/workflow.yaml
+default_state: disabled

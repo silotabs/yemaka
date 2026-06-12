@@ -1,0 +1,6 @@
+tests:
+  - name: proposal_followup_review_from_local_context
+    prompt: Review these proposal notes and identify follow-up risks and unclear claims.
+    want_tools:
+      - rag_search
+      - memory_search

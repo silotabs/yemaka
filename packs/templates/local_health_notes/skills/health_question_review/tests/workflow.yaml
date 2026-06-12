@@ -1,0 +1,6 @@
+tests:
+  - name: health_question_review_from_local_context
+    prompt: Review my local symptom notes and prepare clinician questions.
+    want_tools:
+      - rag_search
+      - memory_search

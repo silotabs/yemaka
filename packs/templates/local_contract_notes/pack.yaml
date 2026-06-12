@@ -1,0 +1,43 @@
+name: local_contract_notes
+version: 0.1.0
+description: Local contract-note workflows for summarizing agreement notes, clauses, obligations, dates, risks to review, and questions for qualified professional review.
+category: contract_notes
+skills:
+  - skills/contract_note_review
+  - skills/clause_question_list
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - memory_write
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+    - edit_file
+    - write_file
+  sensitive_data_rules:
+    - Use only pasted contract notes, local memory, and ingested local documents.
+    - Present summaries, clause questions, dates, obligations, and review notes only.
+    - Do not provide legal advice, decide enforceability, interpret jurisdiction-specific law, draft filings, sign documents, submit forms, contact parties, or update files.
+    - Label assumptions and recommend qualified professional review for legal decisions.
+    - Avoid repeating private names, addresses, signatures, payment details, or identity details unless required for the requested review.
+tests:
+  - skills/contract_note_review/tests/workflow.yaml
+  - skills/clause_question_list/tests/workflow.yaml
+default_state: disabled

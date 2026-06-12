@@ -1,0 +1,5 @@
+tests:
+  - name: daily_plan_from_memory
+    prompt: Plan my day from remembered commitments and give me three focus blocks.
+    want_tools:
+      - memory_search

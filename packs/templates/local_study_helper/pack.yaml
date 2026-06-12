@@ -1,0 +1,41 @@
+name: local_study_helper
+version: 0.1.0
+description: Local study workflows for explanations, study guides, and practice questions from user-provided or ingested notes.
+category: learning
+skills:
+  - skills/study_guide
+  - skills/practice_questions
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - memory_write
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+    - edit_file
+    - write_file
+  sensitive_data_rules:
+    - Use only pasted study material, local memory, and ingested local documents.
+    - Do not claim live or external source coverage.
+    - Do not store student progress, grades, health, or personal learning details.
+tests:
+  - skills/study_guide/tests/workflow.yaml
+  - skills/practice_questions/tests/workflow.yaml
+default_state: disabled

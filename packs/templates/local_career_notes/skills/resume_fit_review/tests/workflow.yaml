@@ -1,0 +1,6 @@
+tests:
+  - name: resume_fit_review_from_local_context
+    prompt: Compare my local resume notes with this role description and list fit gaps.
+    want_tools:
+      - rag_search
+      - memory_search

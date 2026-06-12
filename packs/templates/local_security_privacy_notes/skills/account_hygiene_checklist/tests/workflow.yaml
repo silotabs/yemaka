@@ -1,0 +1,6 @@
+tests:
+  - name: account_hygiene_checklist_from_local_context
+    prompt: Create an account hygiene checklist from my local notes.
+    want_tools:
+      - rag_search
+      - memory_search

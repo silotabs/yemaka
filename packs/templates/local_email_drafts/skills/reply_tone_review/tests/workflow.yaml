@@ -1,0 +1,6 @@
+tests:
+  - name: reply_tone_review_from_local_context
+    prompt: Review this reply for tone before I send it myself.
+    want_tools:
+      - rag_search
+      - memory_search

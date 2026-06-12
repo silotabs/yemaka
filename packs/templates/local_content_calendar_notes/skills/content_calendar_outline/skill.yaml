@@ -1,0 +1,18 @@
+name: content_calendar_outline
+version: 0.1.0
+description: Organize local campaign notes into a content calendar outline, themes, draft slots, assumptions, and questions.
+triggers:
+  - content calendar outline
+  - campaign calendar notes
+  - content plan from notes
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  filesystem_read: false
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1800
+  max_examples: 1

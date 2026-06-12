@@ -1,0 +1,6 @@
+tests:
+  - name: confirmed_followup_capture
+    prompt: Review this meeting summary and save the confirmed follow-up tasks.
+    want_tools:
+      - memory_search
+      - memory_write

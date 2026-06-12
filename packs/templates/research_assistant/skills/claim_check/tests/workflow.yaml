@@ -1,0 +1,6 @@
+tests:
+  - name: local_claim_check
+    prompt: Check this claim against my docs and memory, and label what is supported or unsupported.
+    want_tools:
+      - rag_search
+      - memory_search

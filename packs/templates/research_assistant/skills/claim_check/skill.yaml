@@ -1,0 +1,18 @@
+name: claim_check
+version: 0.1.0
+description: Check user-provided claims against local documents and memory evidence.
+triggers:
+  - check this claim
+  - verify against my docs
+  - validate local evidence
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  filesystem_read: false
+  filesystem_write: ""
+  shell: ""
+  network: false
+context_budget:
+  max_instruction_chars: 1800
+  max_examples: 1

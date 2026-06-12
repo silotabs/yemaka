@@ -1,0 +1,6 @@
+tests:
+  - name: error_note_checklist_from_local_context
+    prompt: Turn my ingested developer notes into a troubleshooting checklist.
+    want_tools:
+      - rag_search
+      - memory_search

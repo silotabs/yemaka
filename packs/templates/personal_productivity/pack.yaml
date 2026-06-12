@@ -1,0 +1,37 @@
+name: personal_productivity
+version: 0.1.0
+description: Local personal planning workflows for daily focus and follow-up capture.
+category: productivity
+skills:
+  - skills/daily_planner
+  - skills/followup_capture
+required_tools:
+  - memory_search
+  - memory_write
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  approval_required_for:
+    - memory_write
+  blocked_actions:
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+  sensitive_data_rules:
+    - Do not capture secrets, credentials, health, financial, or relationship details unless the user explicitly asks to save them.
+    - Summarize tasks and commitments; avoid storing raw private messages.
+tests:
+  - skills/daily_planner/tests/workflow.yaml
+  - skills/followup_capture/tests/workflow.yaml
+default_state: disabled

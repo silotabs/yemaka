@@ -1,0 +1,44 @@
+name: local_finance_notes
+version: 0.1.0
+description: Local finance-note workflows for organizing budget notes, expense categories, invoice notes, payment-status notes, and questions from user-provided or ingested context.
+category: finance_notes
+skills:
+  - skills/budget_note_review
+  - skills/invoice_note_checklist
+required_tools:
+  - rag_search
+  - memory_search
+permissions:
+  internet:
+    required: false
+  filesystem:
+    required: false
+  scheduler:
+    required: false
+  notifications:
+    required: false
+  secrets:
+    required: false
+  connectors:
+    required: false
+safety:
+  blocked_actions:
+    - memory_write
+    - internet_search
+    - internet_fetch
+    - connector_action
+    - scheduler_create
+    - run_shell_safe
+    - edit_file
+    - write_file
+  sensitive_data_rules:
+    - Use only pasted finance notes, local memory, and ingested local documents.
+    - Present summaries, checklists, categories, questions, and review notes only.
+    - Do not provide tax, investment, legal, accounting, lending, insurance, or trading advice.
+    - Do not connect to banks, payment processors, accounting systems, wallets, brokers, or tax services.
+    - Do not move money, pay invoices, place trades, retrieve live prices, schedule reminders, create files, update ledgers, or store financial details.
+    - Avoid repeating private account numbers, payment details, customer details, identity details, or exact balances unless required for the requested review.
+tests:
+  - skills/budget_note_review/tests/workflow.yaml
+  - skills/invoice_note_checklist/tests/workflow.yaml
+default_state: disabled

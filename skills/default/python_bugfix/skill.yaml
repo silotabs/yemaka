@@ -1,0 +1,20 @@
+name: python_bugfix
+version: 0.1.0
+description: Fix Python bugs safely using tests and minimal edits.
+triggers:
+  - python error
+  - traceback
+  - pytest
+  - failing test
+required_tools:
+  - read_file
+  - edit_file
+  - run_tests
+permissions:
+  filesystem_read: true
+  filesystem_write: workspace_only
+  shell: limited
+  network: false
+context_budget:
+  max_instruction_chars: 2200
+  max_examples: 0
