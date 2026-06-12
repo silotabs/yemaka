@@ -31,13 +31,6 @@ Autopilot/mission mode
 Connector marketplace
 ```
 
-## Workspace Hygiene
-
-```bash
-find . -name .DS_Store -print
-git status --short
-```
-
 Remove stale `.DS_Store` files from the worktree before release. Do not remove
 or rewrite unrelated user changes.
 
