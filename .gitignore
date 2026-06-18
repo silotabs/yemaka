@@ -16,7 +16,6 @@ test-results/
 coverage/
 docs/*
 !docs/Yemaka-Logo.png
-!docs/distribution.md
 !docs/install.md
 !docs/public-beta.md
 !docs/release.md
