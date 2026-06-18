@@ -1946,6 +1946,7 @@ func BuildConversationSummary(messages []Message, maxChars int) string {
 	if maxChars <= 0 {
 		maxChars = 1000
 	}
+	messages = ActiveConversationMessages(messages)
 	var lines []string
 	used := 0
 	for _, msg := range messages {
@@ -1968,6 +1969,32 @@ func BuildConversationSummary(messages []Message, maxChars int) string {
 		used += len(line) + 1
 	}
 	return strings.Join(lines, "\n")
+}
+
+func ActiveConversationMessages(messages []Message) []Message {
+	if len(messages) == 0 {
+		return []Message{}
+	}
+	messages = WithInferredResponseParents(messages)
+	userActive := make(map[string]bool)
+	for _, msg := range messages {
+		if msg.Role == "user" && strings.TrimSpace(msg.ID) != "" {
+			userActive[msg.ID] = msg.ActiveVariant
+		}
+	}
+	out := make([]Message, 0, len(messages))
+	for _, msg := range messages {
+		if !msg.ActiveVariant {
+			continue
+		}
+		if msg.Role == "assistant" {
+			if active, ok := userActive[strings.TrimSpace(msg.ParentID)]; ok && !active {
+				continue
+			}
+		}
+		out = append(out, msg)
+	}
+	return out
 }
 
 func compactSummaryText(input string, maxChars int) string {

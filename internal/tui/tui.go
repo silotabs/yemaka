@@ -13,6 +13,7 @@ import (
 	"strings"
 
 	"yemaka/internal/agent"
+	"yemaka/internal/brand"
 	"yemaka/internal/config"
 	"yemaka/internal/connectors"
 	"yemaka/internal/diagnostics"
@@ -156,10 +157,20 @@ func (r *Runner) validate() error {
 
 func (r *Runner) printHeader(ctx context.Context, output io.Writer) {
 	report := diagnostics.Run(ctx, r.deps.Config, r.deps.Profile, r.deps.Memory, r.deps.Runtime)
+	modelReady := "not ready"
+	if report.ModelReady {
+		modelReady = "ready"
+	}
+	internet := "net off"
+	if r.deps.Config != nil && r.deps.Config.Internet.Enabled {
+		internet = "net " + r.deps.Config.Internet.DefaultMode
+	}
+	fmt.Fprintln(output, brand.Wordmark)
+	fmt.Fprintln(output)
 	fmt.Fprintln(output, "Yemaka TUI")
-	fmt.Fprintln(output, "local-first terminal interface, one action at a time")
+	fmt.Fprintln(output, "Local-first agent console")
+	fmt.Fprintf(output, "status: %s | model: %s | policy: %s | %s\n", modelReady, report.SelectedModel, policyMode(r.deps.Config), internet)
 	fmt.Fprintf(output, "profile: %s\n", report.ProfilePath)
-	fmt.Fprintf(output, "model: %s\n", report.SelectedModel)
 	if report.ModelReady {
 		fmt.Fprintln(output, "model_ready: true")
 	} else {
@@ -1473,7 +1484,11 @@ func tuiRetriever(deps Dependencies) agent.Retriever {
 }
 
 func (r *Runner) reloadSkills() error {
-	registry, err := skills.LoadRegistry([]string{"skills/default", r.deps.Profile.Skills})
+	defaultSkillsDir, err := skills.DefaultDir()
+	if err != nil {
+		return err
+	}
+	registry, err := skills.LoadRegistry([]string{defaultSkillsDir, r.deps.Profile.Skills})
 	if err != nil {
 		return err
 	}

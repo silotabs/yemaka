@@ -1,5 +1,6 @@
 #!/bin/sh
 set -eu
+export COPYFILE_DISABLE=1
 
 ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)
 cd "$ROOT_DIR"
@@ -32,6 +33,10 @@ rm -rf "$STAGING_DIR"
 mkdir -p "$STAGING_DIR" "$DIST_DIR"
 cp -R "$APP_PATH" "$STAGING_DIR/Yemaka.app"
 ln -s /Applications "$STAGING_DIR/Applications"
+find "$STAGING_DIR" -name .DS_Store -type f -delete
+find "$STAGING_DIR" -name __MACOSX -type d -prune -exec rm -rf {} \;
+find "$STAGING_DIR" \( -path '*/frontend/playwright-report' -o -path '*/frontend/test-results' -o -path '*/node_modules' \) -type d -prune -exec rm -rf {} \;
+find "$STAGING_DIR" \( -name '*.sqlite' -o -name '*.sqlite3' -o -name '*.db' -o -name '*.db-shm' -o -name '*.db-wal' -o -name '*.log' -o -name '*.tmp' \) -type f -delete
 
 rm -f "$DMG_PATH" "$DMG_PATH.sha256" "$MANIFEST_PATH"
 hdiutil create \

@@ -193,6 +193,178 @@ func TestClassifyCompletedRouteDoesNotHijackNewStandaloneRoute(t *testing.T) {
 	}
 }
 
+func TestRoutingKernelArbitrationMatrix(t *testing.T) {
+	completed := SessionContract{
+		ActiveGoal:       "Search AI trends",
+		ActiveRoute:      RouteInternetSearch,
+		ActiveDomain:     DomainGeneral,
+		ActiveCapability: "internet",
+		ActiveLane:       ToolLaneWebSearch,
+		TaskStatus:       TaskStatusActive,
+		LastOutcome:      LastOutcomeCompleted,
+		UpdatedAt:        time.Now().UTC().Format(time.RFC3339Nano),
+	}
+	incomplete := completed
+	incomplete.LastOutcome = ""
+	incomplete.ActiveTarget = "AI trends"
+
+	cases := []struct {
+		name              string
+		content           string
+		contract          SessionContract
+		wantRoute         string
+		wantMode          string
+		wantClarification bool
+		wantTool          string
+		notTool           string
+		wantFrameRewrite  bool
+		wantFrameTeaching bool
+		wantFrameSocial   bool
+	}{
+		{
+			name:             "you should not editorial wins rewrite",
+			content:          "you shouldn't phrase it like that, make it better",
+			wantRoute:        RouteChatExplanation,
+			notTool:          "rag_search",
+			wantFrameRewrite: true,
+		},
+		{
+			name:             "you should editorial wins rewrite",
+			content:          "you should make this paragraph clearer",
+			wantRoute:        RouteChatExplanation,
+			notTool:          "rag_search",
+			wantFrameRewrite: true,
+		},
+		{
+			name:              "explicit route teaching selected",
+			content:           "next time when I ask this, use local documents instead of web",
+			wantRoute:         RouteLearningAction,
+			wantFrameTeaching: true,
+		},
+		{
+			name:              "explicit workspace source preference selected",
+			content:           "when I ask about this project, use workspace files instead of memory",
+			wantRoute:         RouteLearningAction,
+			wantFrameTeaching: true,
+		},
+		{
+			name:      "continue resumes incomplete turn",
+			content:   "continue",
+			contract:  incomplete,
+			wantRoute: RouteInternetSearch,
+			wantMode:  ContinuationModeContinueSameTask,
+			wantTool:  "internet_search",
+		},
+		{
+			name:              "continue after completed asks clarification",
+			content:           "continue",
+			contract:          completed,
+			wantRoute:         RouteClarify,
+			wantMode:          ContinuationModeUnclear,
+			wantClarification: true,
+		},
+		{
+			name:            "how are after completed is social",
+			content:         "how are?",
+			contract:        completed,
+			wantRoute:       RouteChatExplanation,
+			wantMode:        ContinuationModeSocialChat,
+			notTool:         "internet_search",
+			wantFrameSocial: true,
+		},
+		{
+			name:      "standalone question after completed starts new answer",
+			content:   "good now what is the color of USA flag",
+			contract:  completed,
+			wantRoute: RouteChatExplanation,
+			wantMode:  ContinuationModeNewTask,
+			notTool:   "internet_search",
+		},
+		{
+			name:              "apply without pending operation clarifies",
+			content:           "apply it",
+			wantRoute:         RouteClarify,
+			wantMode:          ContinuationModeUnclear,
+			wantClarification: true,
+		},
+		{
+			name:      "yes without pending approval is ordinary chat",
+			content:   "yes",
+			wantRoute: RouteChatExplanation,
+			notTool:   "edit_file",
+		},
+		{
+			name:              "ambiguous completed follow-up clarifies",
+			content:           "what about the model?",
+			contract:          completed,
+			wantRoute:         RouteClarify,
+			wantMode:          ContinuationModeUnclear,
+			wantClarification: true,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := Classify(Request{Content: tc.content, SessionContract: tc.contract})
+			if got.RouteCategory != tc.wantRoute {
+				t.Fatalf("RouteCategory = %q, want %q; decision=%+v", got.RouteCategory, tc.wantRoute, got)
+			}
+			if tc.wantMode != "" && got.ContinuationMode != tc.wantMode {
+				t.Fatalf("ContinuationMode = %q, want %q; decision=%+v", got.ContinuationMode, tc.wantMode, got)
+			}
+			if got.NeedsClarification != tc.wantClarification {
+				t.Fatalf("NeedsClarification = %t, want %t; decision=%+v", got.NeedsClarification, tc.wantClarification, got)
+			}
+			if tc.wantTool != "" && !hasControlPlaneTool(got.Tools, tc.wantTool) {
+				t.Fatalf("Tools = %v, want %q; decision=%+v", got.Tools, tc.wantTool, got)
+			}
+			if tc.notTool != "" && hasControlPlaneTool(got.Tools, tc.notTool) {
+				t.Fatalf("Tools = %v, did not expect %q; decision=%+v", got.Tools, tc.notTool, got)
+			}
+			if got.MessageFrame.IsRewriteLike != tc.wantFrameRewrite {
+				t.Fatalf("MessageFrame.IsRewriteLike = %t, want %t; frame=%+v", got.MessageFrame.IsRewriteLike, tc.wantFrameRewrite, got.MessageFrame)
+			}
+			if got.MessageFrame.IsRouteTeachingLike != tc.wantFrameTeaching {
+				t.Fatalf("MessageFrame.IsRouteTeachingLike = %t, want %t; frame=%+v", got.MessageFrame.IsRouteTeachingLike, tc.wantFrameTeaching, got.MessageFrame)
+			}
+			if got.MessageFrame.IsSocialTurn != tc.wantFrameSocial {
+				t.Fatalf("MessageFrame.IsSocialTurn = %t, want %t; frame=%+v", got.MessageFrame.IsSocialTurn, tc.wantFrameSocial, got.MessageFrame)
+			}
+			if tc.wantFrameTeaching && !firstRouteCandidateSource(got.RouteCandidates, "route_correction_detector") {
+				t.Fatalf("RouteCandidates = %+v, want route_correction_detector candidate", got.RouteCandidates)
+			}
+		})
+	}
+}
+
+func TestClassifyResumesOnlyStoredPendingOperationShape(t *testing.T) {
+	contract := SessionContract{
+		ActiveRoute:            RouteFileWrite,
+		ActiveCapability:       "filesystem_write",
+		ActiveLane:             ToolLaneFileEdit,
+		ActiveTarget:           "notes.md",
+		TaskStatus:             TaskStatusAwaitingApproval,
+		PendingApproval:        "edit_file",
+		PendingOperationID:     "perm_edit",
+		PendingOperationType:   "edit_file",
+		PendingOperationTarget: "notes.md",
+		PendingOperationStatus: "awaiting_approval",
+		UpdatedAt:              time.Now().UTC().Format(time.RFC3339Nano),
+	}
+	got := Classify(Request{Content: "apply it", SessionContract: contract})
+	if got.RouteCategory != RouteFileWrite || got.ContinuationMode != ContinuationModeApprovePendingAction {
+		t.Fatalf("decision=%+v, want pending file_write resume", got)
+	}
+	if !hasControlPlaneTool(got.Tools, "edit_file") {
+		t.Fatalf("Tools = %v, want edit_file", got.Tools)
+	}
+	if len(got.Files) == 0 || got.Files[0] != "notes.md" {
+		t.Fatalf("Files = %v, want pending target notes.md", got.Files)
+	}
+	if !firstRouteCandidateSource(got.RouteCandidates, "pending_operation") {
+		t.Fatalf("RouteCandidates = %+v, want pending_operation candidate", got.RouteCandidates)
+	}
+}
+
 func TestClassifyIgnoresStaleSessionRouteCommitment(t *testing.T) {
 	contract := SessionContract{
 		ActiveGoal:       "Search current public news",
@@ -212,6 +384,15 @@ func TestClassifyIgnoresStaleSessionRouteCommitment(t *testing.T) {
 	if got.ContinuationMode == ContinuationModeAskFollowupPrevious || got.ContinuationMode == ContinuationModeContinueSameTask {
 		t.Fatalf("ContinuationMode = %q, stale session should not continue previous route", got.ContinuationMode)
 	}
+}
+
+func firstRouteCandidateSource(candidates []RouteCandidate, source string) bool {
+	for _, candidate := range candidates {
+		if candidate.Source == source {
+			return true
+		}
+	}
+	return false
 }
 
 func TestSanitizeSessionContractKeepsFreshAndExpiresStaleStates(t *testing.T) {

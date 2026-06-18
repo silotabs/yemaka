@@ -3845,6 +3845,28 @@ func TestPermissionDecisionApprovedPersistsConversationResult(t *testing.T) {
 	if err != nil {
 		t.Fatalf("SaveToolRun(edit_proposal) error = %v", err)
 	}
+	routeState, err := json.Marshal(routing.SessionContract{
+		ActiveRoute:            routing.RouteFileWrite,
+		TaskStatus:             routing.TaskStatusAwaitingApproval,
+		PendingStep:            "edit_file",
+		PendingApproval:        "edit_file",
+		PendingOperationID:     request.RequestID,
+		PendingOperationType:   "edit_file",
+		PendingOperationTarget: "notes.md",
+		PendingOperationStatus: "awaiting_approval",
+		RouteLockStrength:      "pending_operation",
+		LastOutcome:            routing.LastOutcomeCompleted,
+		UpdatedAt:              time.Now().UTC().Format(time.RFC3339Nano),
+	})
+	if err != nil {
+		t.Fatalf("marshal route state: %v", err)
+	}
+	if _, err := srv.deps.Memory.SaveConversationRouteState(ctx, memory.ConversationRouteState{
+		ConversationID: conversation.ID,
+		StateJSON:      string(routeState),
+	}); err != nil {
+		t.Fatalf("SaveConversationRouteState() error = %v", err)
+	}
 
 	payload := map[string]any{"request": request, "decision": "approved"}
 	data, err := json.Marshal(payload)
@@ -3906,6 +3928,20 @@ func TestPermissionDecisionApprovedPersistsConversationResult(t *testing.T) {
 	}
 	if !sawPermissionResult {
 		t.Fatalf("tool runs = %+v, want permission_result linked to persisted message %s", runs, persisted.ID)
+	}
+	stored, ok, err := srv.deps.Memory.GetConversationRouteState(ctx, conversation.ID)
+	if err != nil {
+		t.Fatalf("GetConversationRouteState() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("conversation route state missing")
+	}
+	var next routing.SessionContract
+	if err := json.Unmarshal([]byte(stored.StateJSON), &next); err != nil {
+		t.Fatalf("unmarshal route state: %v", err)
+	}
+	if next.PendingOperationID != "" || next.PendingApproval != "" || next.PendingStep != "" || next.RouteLockStrength == "pending_operation" {
+		t.Fatalf("route state = %+v, want permission endpoint to clear pending operation", next)
 	}
 }
 

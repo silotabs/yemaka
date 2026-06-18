@@ -49,6 +49,11 @@ func ProposeRouteCorrection(input RouteCorrectionProposalInput) (RouteCorrection
 	if looksLikeFactualFileStateCorrection(normalized) {
 		return RouteCorrectionProposal{}, false
 	}
+	if looksLikeEditorialRewriteTask(normalized) &&
+		!looksExplicitRouteTeachingCue(normalized) &&
+		!looksExplicitSourceOrToolPreferenceCorrection(normalized) {
+		return RouteCorrectionProposal{}, false
+	}
 	if !looksLikeRoutingCorrection(normalized) {
 		return RouteCorrectionProposal{}, false
 	}
@@ -139,16 +144,131 @@ func looksLikeRoutingCorrection(message string) bool {
 	if message == "" {
 		return false
 	}
-	if containsStrongCorrectionCue(message) {
+	if looksExplicitSourceOrToolPreferenceCorrection(message) {
 		return true
 	}
-	hasNegation := containsAnyCorrectionPhrase(message, "not ", "don't ", "dont ", "do not ", "instead")
-	hasRouteSignal := looksRouteCorrectionSignal(message)
-	hasSource := looksLocalDocumentCorrection(message) ||
+	if looksExplicitClarifyCorrection(message) {
+		return true
+	}
+	return looksExplicitRouteTeachingCue(message) && looksRouteCorrectionSignal(message)
+}
+
+func looksExplicitRouteTeachingCue(message string) bool {
+	return containsAnyCorrectionPhrase(message,
+		"next time",
+		"remember that",
+		"remember this",
+		"save this routing correction",
+		"save this route correction",
+		"when i ask",
+		"when i need",
+		"when i say",
+		"for prompts like this",
+		"for this kind of request",
+		"for this type of request",
+		"this kind of request",
+		"this type of request",
+		"route this type of prompt to",
+		"route this prompt to",
+		"route these prompts to",
+		"treat ",
+	) || strings.Contains(message, "remember:")
+}
+
+func looksExplicitSourceOrToolPreferenceCorrection(message string) bool {
+	if looksPastedCodeCorrection(message) &&
+		containsAnyCorrectionPhrase(message, "don't fetch", "dont fetch", "do not fetch", "without fetching") {
+		return true
+	}
+	hasPreferredSource := looksLocalDocumentCorrection(message) ||
 		looksMemoryCorrection(message) ||
 		looksWorkspaceCorrection(message) ||
-		looksPastedCodeCorrection(message)
-	return (containsWeakCorrectionCue(message) && hasRouteSignal) || (hasNegation && hasSource)
+		looksInternetFreshnessCorrection(message)
+	if !hasPreferredSource {
+		return false
+	}
+	if looksExplicitRouteTeachingCue(message) {
+		return true
+	}
+	return containsAnyCorrectionPhrase(message,
+		"instead",
+		"instead of",
+		"not internet",
+		"not web",
+		"not online",
+		"not memory",
+		"not workspace",
+		"not repo",
+		"not repository",
+		"not local documents",
+		"not local docs",
+		"don't use web",
+		"dont use web",
+		"do not use web",
+		"don't search the web",
+		"dont search the web",
+		"do not search the web",
+		"use local docs instead",
+		"use local documents instead",
+		"use memory instead",
+		"use workspace files instead",
+		"use repo files instead",
+	)
+}
+
+func looksExplicitClarifyCorrection(message string) bool {
+	return looksClarifyCorrection(message) && containsAnyCorrectionPhrase(message,
+		"ask me first",
+		"ask what i mean",
+		"ask a follow-up",
+		"ask follow-up",
+		"should have asked",
+		"should've asked",
+		"target is unclear",
+		"unclear target",
+		"before acting",
+		"not run a tool",
+		"do not run a tool",
+		"don't run a tool",
+		"dont run a tool",
+	)
+}
+
+func looksLikeEditorialRewriteTask(message string) bool {
+	return containsAnyCorrectionPhrase(message,
+		"make better",
+		"make this better",
+		"make it better",
+		"make this paragraph better",
+		"rewrite",
+		"rewrite this",
+		"improve",
+		"improve this",
+		"polish",
+		"polish this",
+		"refine",
+		"refine this",
+		"make professional",
+		"make it professional",
+		"make this professional",
+		"make this clearer",
+		"make it clearer",
+		"make this paragraph clearer",
+		"shorten",
+		"shorten this",
+		"expand",
+		"expand this",
+		"fix grammar",
+		"fix this paragraph",
+		"rephrase",
+		"rephrase this",
+		"summarize this better",
+		"summarise this better",
+		"phrase it like that",
+		"say it like that",
+		"word it like that",
+		"paragraph better",
+	)
 }
 
 func looksRouteCorrectionSignal(message string) bool {
@@ -159,37 +279,6 @@ func looksRouteCorrectionSignal(message string) bool {
 		looksInternetFreshnessCorrection(message) ||
 		looksClarifyCorrection(message) ||
 		containsAnyCorrectionPhrase(message, "web search", "internet search", "use web", "use internet", "search online")
-}
-
-func containsStrongCorrectionCue(message string) bool {
-	return containsAnyCorrectionPhrase(message,
-		"that was wrong",
-		"wrong route",
-		"should have",
-		"should've",
-		"you should",
-		"when i ask",
-		"when i need",
-		"remember:",
-		"remember that",
-		"remember this",
-		"next time",
-		"for prompts like this",
-		"when i say",
-		"treat ",
-		"ask a follow-up",
-		"ask follow-up",
-		"don't guess",
-		"dont guess",
-		"ask me first",
-		"ask what i mean",
-		"target is unclear",
-		"instead",
-	)
-}
-
-func containsWeakCorrectionCue(message string) bool {
-	return containsAnyCorrectionPhrase(message, "i meant", "no,")
 }
 
 func inferCorrectedRoute(message string) (string, []string, []string, []string, string) {
@@ -204,7 +293,7 @@ func inferCorrectedRoute(message string) (string, []string, []string, []string, 
 		forbiddenTools = appendUniqueString(forbiddenTools, tool)
 		addTag("avoid:" + tool)
 	}
-	negatesInternet := containsAnyCorrectionPhrase(message, "not internet", "not web", "not online", "don't search the web", "dont search the web", "do not search the web", "don't fetch", "dont fetch", "do not fetch")
+	negatesInternet := containsAnyCorrectionPhrase(message, "not internet", "not web", "not online", "instead of internet", "instead of web", "instead of online", "don't search the web", "dont search the web", "do not search the web", "don't fetch", "dont fetch", "do not fetch")
 	negatesToolUse := containsAnyCorrectionPhrase(message, "don't use a tool", "dont use a tool", "do not use a tool", "should not have used a tool", "without tool")
 	if negatesInternet {
 		addTag("intent:avoid_tool")
@@ -508,8 +597,9 @@ func normalizeCorrectionReply(value string) string {
 
 func containsAnyCorrectionPhrase(content string, phrases ...string) bool {
 	content = normalizeCorrectionText(content)
+	contentTokens := correctionWordTokens(content)
 	contentTokenSet := map[string]bool{}
-	for _, token := range correctionWordTokens(content) {
+	for _, token := range contentTokens {
 		contentTokenSet[token] = true
 	}
 	for _, phrase := range phrases {
@@ -517,13 +607,42 @@ func containsAnyCorrectionPhrase(content string, phrases ...string) bool {
 		if phrase == "" {
 			continue
 		}
-		if tokens := correctionWordTokens(phrase); len(tokens) == 1 && tokens[0] == phrase {
-			if contentTokenSet[phrase] {
+		tokens := correctionWordTokens(phrase)
+		switch len(tokens) {
+		case 0:
+			continue
+		case 1:
+			if tokens[0] == phrase && contentTokenSet[phrase] {
 				return true
 			}
-			continue
+			if strings.ContainsAny(phrase, ":;/@#<>=+-") && strings.Contains(content, phrase) {
+				return true
+			}
+		default:
+			if containsCorrectionTokenSequence(contentTokens, tokens) {
+				return true
+			}
+			if strings.ContainsAny(phrase, ":;/@#<>=+-") && strings.Contains(content, phrase) {
+				return true
+			}
 		}
-		if strings.Contains(content, phrase) {
+	}
+	return false
+}
+
+func containsCorrectionTokenSequence(contentTokens []string, phraseTokens []string) bool {
+	if len(phraseTokens) == 0 || len(phraseTokens) > len(contentTokens) {
+		return false
+	}
+	for i := 0; i <= len(contentTokens)-len(phraseTokens); i++ {
+		matched := true
+		for j, token := range phraseTokens {
+			if contentTokens[i+j] != token {
+				matched = false
+				break
+			}
+		}
+		if matched {
 			return true
 		}
 	}

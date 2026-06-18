@@ -77,6 +77,7 @@ const (
 type Request struct {
 	Content          string
 	SourceKind       string
+	MessageFrame     MessageFrame
 	HasContext       bool
 	SkillName        string
 	RAGEnabled       bool
@@ -127,6 +128,7 @@ type Decision struct {
 	BlockedToolset        []string
 	RouteCandidates       []RouteCandidate
 	RouteCorrectionID     string
+	MessageFrame          MessageFrame
 }
 
 const (
@@ -156,6 +158,9 @@ type RouteCorrection struct {
 
 func Classify(input Request) Decision {
 	input.SessionContract = SanitizeSessionContract(input.SessionContract, time.Now())
+	if input.MessageFrame == (MessageFrame{}) {
+		input.MessageFrame = BuildMessageFrame(input)
+	}
 	content := strings.ToLower(strings.TrimSpace(input.Content))
 	if input.HasContext || hasProvidedContext(input) {
 		input.HasContext = true
@@ -196,6 +201,14 @@ func Classify(input Request) Decision {
 		decision.AmbiguityFlags = append([]string{}, resolution.AmbiguityFlags...)
 		decision.RouteCandidates = candidates
 		return enrichDecision(input, decision)
+	}
+	if messageFramePreemptsTaskFrame(input.MessageFrame) {
+		if decision, ok := ArbitrateRoute(input, frame, preflight, resolution, candidates); ok {
+			if len(decision.RouteCandidates) == 0 {
+				decision.RouteCandidates = candidates
+			}
+			return enrichDecision(input, decision)
+		}
 	}
 	if decision, ok := decisionFromTaskFrame(frame); ok {
 		decision.Preflight = preflight
@@ -308,8 +321,22 @@ func Classify(input Request) Decision {
 	}
 }
 
+func messageFramePreemptsTaskFrame(frame MessageFrame) bool {
+	return frame.IsApplyLike ||
+		frame.IsRewriteLike ||
+		frame.IsSocialTurn ||
+		frame.IsLastResponseArtifactAction ||
+		frame.IsRouteTeachingLike
+}
+
 func enrichDecision(input Request, decision Decision) Decision {
 	content := strings.TrimSpace(input.Content)
+	if decision.MessageFrame == (MessageFrame{}) {
+		decision.MessageFrame = input.MessageFrame
+		if decision.MessageFrame == (MessageFrame{}) {
+			decision.MessageFrame = BuildMessageFrame(input)
+		}
+	}
 	if decision.TaskFrame.RawRequest == "" {
 		decision.TaskFrame = ExtractTaskFrame(input)
 	}
@@ -332,11 +359,15 @@ func enrichDecision(input Request, decision Decision) Decision {
 		decision.RouteCandidates = BuildRouteCandidates(input, decision.TaskFrame, decision.Preflight, ResolveContinuation(content, input.SessionContract, decision.Continuation))
 	}
 	inlinePastedExplanation := LooksInlinePastedExplanationRequest(content)
-	if !inlinePastedExplanation {
+	if len(decision.Files) == 0 && !inlinePastedExplanation {
 		decision.Files = FileHints(content)
 	}
 	if len(decision.Files) == 0 && !inlinePastedExplanation && LooksFileFollowupReference(content) {
-		decision.Files = FileHints(input.TaskMemory)
+		if target := fileFollowupTargetFromState(input, decision); target != "" {
+			decision.Files = []string{target}
+		} else {
+			decision.Files = FileHints(input.TaskMemory)
+		}
 	}
 	if decision.RouteCorrectionID == "" && !decision.PreflightSelected {
 		decision.Tools = ToolsFor(content, decision.TaskType)
@@ -417,6 +448,13 @@ func LooksInternetForDecision(content string) bool {
 }
 
 func decisionFromApprovedRouteCorrection(input Request, frame TaskFrame) (Decision, bool) {
+	if input.MessageFrame.IsRewriteLike ||
+		input.MessageFrame.IsSocialTurn ||
+		input.MessageFrame.IsApplyLike ||
+		input.MessageFrame.IsLastResponseArtifactAction ||
+		input.MessageFrame.IsRouteTeachingLike {
+		return Decision{}, false
+	}
 	if !routeCorrectionsMayApply(input.Content, frame) {
 		return Decision{}, false
 	}
@@ -760,6 +798,34 @@ func stripInternetSearchWords(content string) string {
 		content = strings.ReplaceAll(content, term, " ")
 	}
 	return strings.Join(strings.Fields(content), " ")
+}
+
+func fileFollowupTargetFromState(input Request, decision Decision) string {
+	for _, target := range []string{
+		decision.Preflight.Target,
+		decision.Preflight.PriorTarget,
+		decision.Continuation.NewTarget,
+		decision.Continuation.PriorTarget,
+		input.Continuation.NewTarget,
+		input.Continuation.PriorTarget,
+		input.SessionContract.PendingOperationTarget,
+		decision.Target,
+		input.SessionContract.ActiveTarget,
+	} {
+		if cleaned := cleanFileFollowupTarget(target); cleaned != "" {
+			return cleaned
+		}
+	}
+	return ""
+}
+
+func cleanFileFollowupTarget(value string) string {
+	value = strings.TrimSpace(value)
+	value = strings.Trim(value, "`\"'")
+	if hints := FileHints(value); len(hints) > 0 {
+		return hints[0]
+	}
+	return ""
 }
 
 func firstNonEmptyString(values ...string) string {
@@ -2485,8 +2551,7 @@ func looksLocalTimeFollowupCue(content string) bool {
 		ContainsSearchTerm(content, "not my local") ||
 		ContainsSearchTerm(content, "time there") ||
 		ContainsSearchTerm(content, "i meant") ||
-		ContainsSearchTerm(content, "you mean") ||
-		ContainsSearchTerm(content, "What is")
+		ContainsSearchTerm(content, "you mean")
 }
 
 func LooksAmbiguousLocalTimeTask(content string) bool {

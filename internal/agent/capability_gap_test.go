@@ -104,6 +104,32 @@ func TestCapabilityGapRouterGenericDailyRoutineDoesNotUseURLMonitoringCopy(t *te
 	}
 }
 
+func TestCapabilityGapRouterDoesNotCaptureGenericRoutingTokens(t *testing.T) {
+	router := NewCapabilityGapRouter(config.Default(), &recordingCapabilityGenerator{})
+	cases := []string{
+		"continue",
+		"yes",
+		"no",
+		"what do you mean?",
+		"make better",
+		"make this better: hello dear sir",
+	}
+	for _, prompt := range cases {
+		t.Run(prompt, func(t *testing.T) {
+			plan := BuildPlan(PlanInput{Content: prompt})
+			proposal, ok := router.Propose(plan, PlanInput{Content: prompt}, ExecutionDecision{
+				Status:    ExecutionBlocked,
+				ToolName:  "safe_tool",
+				RiskLevel: RiskMedium,
+				Reason:    "no matching safe executor",
+			})
+			if ok {
+				t.Fatalf("Propose() = %+v, want no capability/domain-pack capture", proposal)
+			}
+		})
+	}
+}
+
 func TestCapabilityGapRouterExplicitExtensionRequestUsesCleanSubject(t *testing.T) {
 	cfg := config.Default()
 	router := NewCapabilityGapRouter(cfg, extensions.NewStore(filepath.Join(t.TempDir(), "extensions", "generated"), t.TempDir()))

@@ -1,4 +1,4 @@
-import { humanizeIdentifier } from './uiHelpers';
+import { productActivityLabel, productStatusLabel, productToolLabel } from './uiHelpers';
 
 type ActivityKeyItem = {
   id?: string;
@@ -22,7 +22,7 @@ export function activityKey(item: ActivityKeyItem, index: number) {
 }
 
 export function activityLabel(line: string) {
-  return String(line || '').replace(/\s+/g, ' ').trim();
+  return productActivityLabel(String(line || '').replace(/\s+/g, ' ').trim());
 }
 
 export function activityTimeLabel(date = new Date()) {
@@ -51,7 +51,7 @@ export function activityEntriesFromToolRuns<TRun extends ActivityToolRunLike>(
   limit = 24
 ) {
   return (toolRuns ?? []).slice(0, limit).map((run, index) => {
-    const label = `${humanizeIdentifier(run.toolName, 'Tool')}: ${humanizeIdentifier(run.status || 'logged', 'Logged')}`;
+    const label = `${productToolLabel(run.toolName)}: ${productStatusLabel(run.status || 'logged', 'Logged')}`;
     return {
       id: `persisted-${run.id || index}`,
       kind: activityKind(label),
@@ -67,9 +67,9 @@ export function shouldHydrateActivity(activity: ActivityEntryLike[] | null | und
 
 export function activityKind(line: string) {
   const value = line.toLowerCase();
-  if (value.startsWith('permission')) return 'permission';
-  if (value.includes('verification')) return 'verification';
-  if (value.includes('tool') || value.includes('executor') || value.includes('file')) return 'tool';
+  if (value.startsWith('permission') || value.startsWith('approval')) return 'permission';
+  if (value.includes('result check') || value.includes('verification')) return 'verification';
+  if (value.includes('local action') || value.includes('tool') || value.includes('executor') || value.includes('file')) return 'tool';
   if (value.includes('model')) return 'model';
   if (value.includes('memory')) return 'memory';
   if (value.includes('document') || value.includes('workspace') || value.includes('ingested')) return 'documents';

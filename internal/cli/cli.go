@@ -10,13 +10,13 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"runtime"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
 	"yemaka/internal/agent"
+	"yemaka/internal/brand"
 	"yemaka/internal/config"
 	"yemaka/internal/connectors"
 	"yemaka/internal/diagnostics"
@@ -64,6 +64,12 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 	if len(args) == 0 || args[0] == "help" || args[0] == "--help" || args[0] == "-h" {
 		printHelp(stdout)
 		return nil
+	}
+	printedWordmark := false
+	if shouldPrintWordmark(args, stderr) {
+		fmt.Fprintln(stderr, brand.Wordmark)
+		fmt.Fprintln(stderr)
+		printedWordmark = true
 	}
 	if args[0] == "helper" {
 		return runHelper(ctx, args[1:], os.Stdin, stdout)
@@ -144,9 +150,44 @@ func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer)
 	case "tui":
 		return runTUI(ctx, app, args[1:], os.Stdin, stdout)
 	default:
-		printHelp(stderr)
+		if printedWordmark {
+			printHelpBody(stderr)
+		} else {
+			printHelp(stderr)
+		}
 		return fmt.Errorf("unknown command %q", args[0])
 	}
+}
+
+func shouldPrintWordmark(args []string, stderr io.Writer) bool {
+	if os.Getenv("YEMAKA_NO_BANNER") != "" || !writerIsTerminal(stderr) {
+		return false
+	}
+	if len(args) == 0 {
+		return false
+	}
+	switch args[0] {
+	case "help", "--help", "-h", "helper", "tui":
+		return false
+	}
+	for _, arg := range args {
+		if arg == "--json" {
+			return false
+		}
+	}
+	return true
+}
+
+func writerIsTerminal(w io.Writer) bool {
+	file, ok := w.(*os.File)
+	if !ok || file == nil {
+		return false
+	}
+	info, err := file.Stat()
+	if err != nil {
+		return false
+	}
+	return info.Mode()&os.ModeCharDevice != 0
 }
 
 func runHelper(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer) error {
@@ -230,7 +271,7 @@ func runServe(ctx context.Context, app *appContext, args []string, stdout io.Wri
 		DevLog:         stdout,
 	})
 	fmt.Fprintf(stdout, "Yemaka local web: http://%s\n", addr)
-	fmt.Fprintln(stdout, "Serving the same local Go core. Press Ctrl+C to stop.")
+	fmt.Fprintln(stdout, "Serving the same local Go core. Press Ctrl+C to stop.\nUse `yemaka doctor` to check the setup and `yemaka --help` for advanced options.")
 	if frontendWatch {
 		fmt.Fprintln(stdout, "Frontend watch: on (rebuilds frontend/dist and refreshes the browser after frontend changes).")
 	}
@@ -1249,66 +1290,11 @@ func installBuiltInDomainPackTemplate(app *appContext, name string, stdout io.Wr
 }
 
 func builtInDomainPackTemplateCatalog() (workflows.TemplateCatalog, error) {
-	root, err := builtInDomainPackTemplateRoot()
+	root, err := workflows.BuiltInTemplateRoot()
 	if err != nil {
 		return workflows.TemplateCatalog{}, err
 	}
 	return workflows.NewBuiltInTemplateCatalog(root)
-}
-
-func builtInDomainPackTemplateRoot() (string, error) {
-	candidates := []string{}
-	if cwd, err := os.Getwd(); err == nil {
-		candidates = append(candidates, cwd)
-	}
-	if executable, err := os.Executable(); err == nil {
-		candidates = append(candidates, filepath.Dir(executable))
-	}
-	if _, file, _, ok := runtime.Caller(0); ok {
-		candidates = append(candidates, filepath.Dir(file))
-	}
-
-	seen := map[string]struct{}{}
-	for _, candidate := range candidates {
-		root, ok := findBuiltInDomainPackTemplateRoot(candidate, seen)
-		if ok {
-			return root, nil
-		}
-	}
-	return "", fmt.Errorf("built-in domain pack templates not found; run from a Yemaka checkout or install a local pack directory")
-}
-
-func findBuiltInDomainPackTemplateRoot(start string, seen map[string]struct{}) (string, bool) {
-	start = strings.TrimSpace(start)
-	if start == "" {
-		return "", false
-	}
-	dir, err := filepath.Abs(start)
-	if err != nil {
-		return "", false
-	}
-	if info, err := os.Stat(dir); err == nil && !info.IsDir() {
-		dir = filepath.Dir(dir)
-	}
-	for {
-		if _, exists := seen[dir]; exists {
-			return "", false
-		}
-		seen[dir] = struct{}{}
-		if hasBuiltInDomainPackTemplates(dir) {
-			return dir, true
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", false
-		}
-		dir = parent
-	}
-}
-
-func hasBuiltInDomainPackTemplates(root string) bool {
-	info, err := os.Stat(filepath.Join(root, "packs", "templates"))
-	return err == nil && info.IsDir()
 }
 
 func domainPackStatusByName(root string) (map[string]domainpacks.PackStatus, error) {
@@ -4714,11 +4700,15 @@ func skillRegistryDirs(profile *profiles.Profile) ([]string, error) {
 	if profile == nil {
 		return nil, fmt.Errorf("profile is required")
 	}
+	defaultSkillsDir, err := skills.DefaultDir()
+	if err != nil {
+		return nil, err
+	}
 	packDirs, err := domainpacks.EnabledSkillDirs(filepath.Join(profile.Root, "domain_packs"))
 	if err != nil {
 		return nil, err
 	}
-	return skills.ProfileRegistryDirs("skills/default", profile.Skills, packDirs), nil
+	return skills.ProfileRegistryDirs(defaultSkillsDir, profile.Skills, packDirs), nil
 }
 
 func skillSourceLabel(app *appContext, source string, dir string) string {
@@ -5168,6 +5158,12 @@ func runShell(ctx context.Context, app *appContext, args []string, stdout io.Wri
 }
 
 func printHelp(w io.Writer) {
+	fmt.Fprintln(w, brand.Wordmark)
+	fmt.Fprintln(w)
+	printHelpBody(w)
+}
+
+func printHelpBody(w io.Writer) {
 	fmt.Fprintln(w, "Yemaka local-first AI agent")
 	fmt.Fprintln(w, "An AI agent from SiloTabs optimized for local-first operation on low-resource systems, https://silotabs.com")
 	fmt.Fprintln(w)

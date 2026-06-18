@@ -150,6 +150,87 @@ func workspaceRootAndTargetForTool(cfg SafeToolConfig, target string) (string, s
 	return grantRoot, filepath.ToSlash(rel), access, nil
 }
 
+func workspaceRootAndWriteTargetForTool(cfg SafeToolConfig, target string) (string, string, *safety.WorkspaceAccess, error) {
+	root := strings.TrimSpace(cfg.WorkspaceRoot)
+	if root == "" {
+		root = "."
+	}
+	target = strings.TrimSpace(target)
+	if target == "" {
+		return "", "", nil, fmt.Errorf("file path is required")
+	}
+	normalized := safety.NormalizeUserSuppliedPath(target)
+	abs := normalized
+	if !filepath.IsAbs(abs) {
+		abs = filepath.Join(root, abs)
+	}
+	abs = filepath.Clean(abs)
+	currentRoot, err := safety.ResolveWorkspace(root)
+	if err != nil {
+		return "", "", nil, err
+	}
+	if pathWithinRoot(currentRoot, abs) {
+		rel, err := filepath.Rel(currentRoot, abs)
+		if err != nil {
+			return "", "", nil, fmt.Errorf("resolve workspace write path: %w", err)
+		}
+		return currentRoot, filepath.ToSlash(rel), nil, nil
+	}
+	if strings.TrimSpace(cfg.WorkspaceGrants.Path) == "" {
+		return "", "", nil, workspaceGrantRequiredError(abs)
+	}
+	accessPath, err := existingWriteAccessPath(abs)
+	if err != nil {
+		return "", "", nil, err
+	}
+	access, err := safety.RequireWorkspaceAccessWithBookmark(currentRoot, accessPath, cfg.WorkspaceGrants)
+	if err != nil {
+		return "", "", nil, err
+	}
+	grantRoot := strings.TrimSpace(access.Grant.Path)
+	if grantRoot == "" {
+		access.Close()
+		return "", "", nil, workspaceGrantRequiredError(abs)
+	}
+	rel, err := filepath.Rel(grantRoot, abs)
+	if err != nil {
+		access.Close()
+		return "", "", nil, fmt.Errorf("resolve granted workspace write path: %w", err)
+	}
+	return grantRoot, filepath.ToSlash(rel), access, nil
+}
+
+func existingWriteAccessPath(path string) (string, error) {
+	path = filepath.Clean(safety.NormalizeUserSuppliedPath(strings.TrimSpace(path)))
+	if path == "" || path == "." {
+		return "", fmt.Errorf("file path is required")
+	}
+	if _, err := os.Stat(path); err == nil {
+		return path, nil
+	} else if !os.IsNotExist(err) {
+		return "", fmt.Errorf("stat file path: %w", err)
+	}
+	parent := filepath.Dir(path)
+	for parent != "" && parent != "." {
+		info, err := os.Stat(parent)
+		if err == nil {
+			if !info.IsDir() {
+				return "", fmt.Errorf("file parent is not a directory: %s", parent)
+			}
+			return parent, nil
+		}
+		if !os.IsNotExist(err) {
+			return "", fmt.Errorf("stat file parent: %w", err)
+		}
+		next := filepath.Dir(parent)
+		if next == parent {
+			break
+		}
+		parent = next
+	}
+	return "", fmt.Errorf("file parent folder does not exist: %s", filepath.Dir(path))
+}
+
 func requireWorkspaceAccessForTool(cfg SafeToolConfig, target string) (*safety.WorkspaceAccess, error) {
 	root := strings.TrimSpace(cfg.WorkspaceRoot)
 	if root == "" {
@@ -198,6 +279,53 @@ func workspaceGrantRequiredError(path string) error {
 func coreToolResult(ctx context.Context, cfg SafeToolConfig, decision ExecutionDecision) (ExecutionResult, bool, error) {
 	limits := workspaceLimits(cfg)
 	switch decision.ToolName {
+	case "approved_edit_file":
+		if strings.TrimSpace(decision.RequestID) == "" {
+			return ExecutionResult{}, true, fmt.Errorf("approved_edit_file requires a permission request id")
+		}
+		if len(decision.Command) < 3 {
+			return ExecutionResult{}, true, fmt.Errorf("approved_edit_file requires path and approved content")
+		}
+		root, target, access, err := workspaceRootAndWriteTargetForTool(cfg, decision.Command[1])
+		if err != nil {
+			return ExecutionResult{}, true, err
+		}
+		if access != nil {
+			defer access.Close()
+		}
+		content := strings.Join(decision.Command[2:], " ")
+		options := writeOptions(cfg)
+		plan, err := workspace.PlanWrite(ctx, root, target, content, options)
+		if err != nil {
+			return ExecutionResult{}, true, err
+		}
+		applied, err := workspace.ApplyWrite(ctx, root, plan, options)
+		if err != nil {
+			return ExecutionResult{}, true, err
+		}
+		verification := workspace.VerifyAppliedWrite(ctx, root, applied, options)
+		status := "completed"
+		if strings.TrimSpace(verification.Status) != "" && verification.Status != "pass" {
+			status = verification.Status
+		}
+		displayPath := strings.TrimSpace(decision.Command[1])
+		if displayPath == "" {
+			displayPath = applied.Path
+		}
+		text := fmt.Sprintf(
+			"FILE WRITE APPLIED\npath: %s\nsnapshot_id: %s\nverification: %s\nchanged: %t\n\n%s",
+			displayPath,
+			applied.SnapshotID,
+			verification.Status,
+			applied.Changed,
+			strings.TrimSpace(applied.Diff),
+		)
+		return ExecutionResult{
+			Context:    strings.TrimSpace(text),
+			Sources:    []string{displayPath},
+			SourceKind: "tool",
+			Status:     status,
+		}, true, nil
 	case "local_time":
 		now := time.Now()
 		label := ""

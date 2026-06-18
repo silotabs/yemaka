@@ -36,6 +36,7 @@ dedicated to a safe Yemaka install directory
 guarded against repo/home/common-folder installs
 easy to inspect
 easy to uninstall
+easy to rediscover from an install receipt
 free of bundled model artifacts
 safe without optional internet, cloud, connectors, or jobs
 ```
@@ -43,6 +44,20 @@ safe without optional internet, cloud, connectors, or jobs
 Full data removal is intentionally stricter than shim removal. The uninstall
 script refuses `--remove-data` unless the target is a safe Yemaka install home
 with a `.yemaka-install-root` marker.
+
+Install scripts write a user-local `install-receipt.env` with the install home,
+command shim directory, installed binary, and log path. The uninstaller reads
+that receipt to prefill paths, then prompts before removing anything.
+
+The install home must include first-party local assets:
+
+```text
+<YEMAKA_HOME>/skills/default
+<YEMAKA_HOME>/packs/templates
+```
+
+Those assets let installed builds show default skills and built-in pack
+templates without depending on the source checkout as the current directory.
 
 The release check should make warnings understandable instead of hiding them.
 

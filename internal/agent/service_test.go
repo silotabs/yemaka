@@ -15,7 +15,9 @@ import (
 	"yemaka/internal/memory"
 	"yemaka/internal/modelprofiles"
 	"yemaka/internal/models"
+	"yemaka/internal/profiles"
 	"yemaka/internal/routing"
+	"yemaka/internal/safety"
 )
 
 type failingRuntime struct{}
@@ -1332,6 +1334,196 @@ func TestAskEditRequestEmitsPermissionRequestAndModelDraft(t *testing.T) {
 	}
 }
 
+func TestChatApplyPendingEditApprovalCompletesStoredProposal(t *testing.T) {
+	ctx := context.Background()
+	cfg := config.Default()
+	root := t.TempDir()
+	grantedRoot := filepath.Join(t.TempDir(), "granted")
+	if err := os.MkdirAll(grantedRoot, 0o755); err != nil {
+		t.Fatalf("create granted root: %v", err)
+	}
+	profileRoot := filepath.Join(t.TempDir(), "profile")
+	profile := &profiles.Profile{
+		Root:        profileRoot,
+		Snapshots:   filepath.Join(profileRoot, "snapshots"),
+		Permissions: filepath.Join(profileRoot, "permissions"),
+	}
+	for _, dir := range []string{profile.Snapshots, profile.Permissions} {
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatalf("create profile dir %s: %v", dir, err)
+		}
+	}
+	grantStore := safety.NewWorkspaceGrantStore(safety.WorkspaceGrantsPath(profile.Permissions))
+	if _, err := grantStore.Grant(grantedRoot, "Granted QA", "test"); err != nil {
+		t.Fatalf("grant workspace: %v", err)
+	}
+	targetPath := filepath.Join(grantedRoot, "testing.md")
+	store, err := memory.Open(ctx, filepath.Join(t.TempDir(), "memory.sqlite"))
+	if err != nil {
+		t.Fatalf("memory.Open() error = %v", err)
+	}
+	defer store.Close()
+	conversation, err := store.CreateConversation(ctx, "pending edit")
+	if err != nil {
+		t.Fatalf("CreateConversation() error = %v", err)
+	}
+
+	request := PermissionRequest{
+		RequestID:            "perm_apply_chat",
+		ToolName:             "edit_file",
+		Command:              []string{"edit_file", targetPath},
+		RiskLevel:            RiskMedium,
+		Reason:               "file edits require confirmation and snapshot flow",
+		RequiresConfirmation: true,
+		WorkspaceOnly:        true,
+		DiffPreview:          true,
+		SnapshotBeforeWrite:  true,
+		RollbackSupported:    true,
+	}
+	proposal := EditProposal{
+		RequestID:           request.RequestID,
+		Path:                targetPath,
+		Content:             "who is yemaka\n",
+		ContentSource:       "inline",
+		Status:              "ready_for_preview",
+		Reason:              "A candidate file body is available for diff preview.",
+		DiffPreview:         true,
+		SnapshotBeforeWrite: true,
+		RollbackSupported:   true,
+	}
+	if _, err := store.SaveToolRun(ctx, memory.ToolRun{
+		ConversationID: conversation.ID,
+		ToolName:       "permission_request",
+		Input:          map[string]any{"request_id": request.RequestID, "tool_name": request.ToolName},
+		Output:         request,
+		Status:         ExecutionNeedsConfirmation,
+		RiskLevel:      request.RiskLevel,
+	}); err != nil {
+		t.Fatalf("SaveToolRun(permission_request) error = %v", err)
+	}
+	if _, err := store.SaveToolRun(ctx, memory.ToolRun{
+		ConversationID: conversation.ID,
+		ToolName:       "edit_proposal",
+		Input:          map[string]any{"request_id": proposal.RequestID, "path": proposal.Path},
+		Output:         proposal,
+		Status:         proposal.Status,
+		RiskLevel:      RiskMedium,
+	}); err != nil {
+		t.Fatalf("SaveToolRun(edit_proposal) error = %v", err)
+	}
+	state := routing.SessionContract{
+		ActiveRoute:            routing.RouteFileWrite,
+		TaskStatus:             routing.TaskStatusAwaitingApproval,
+		PendingApproval:        "edit_file",
+		PendingOperationID:     request.RequestID,
+		PendingOperationType:   "edit_file",
+		PendingOperationTarget: targetPath,
+		PendingOperationStatus: "awaiting_approval",
+		RouteLockStrength:      "pending_operation",
+		UpdatedAt:              time.Now().UTC().Format(time.RFC3339Nano),
+	}
+	data, err := json.Marshal(state)
+	if err != nil {
+		t.Fatalf("marshal session state: %v", err)
+	}
+	if _, err := store.SaveConversationRouteState(ctx, memory.ConversationRouteState{
+		ConversationID: conversation.ID,
+		StateJSON:      string(data),
+	}); err != nil {
+		t.Fatalf("SaveConversationRouteState() error = %v", err)
+	}
+
+	var requests []models.ChatRequest
+	service := &Service{
+		Router: models.NewRouter(cfg),
+		Runtime: recordingRuntime{
+			text:     "model should not run",
+			requests: &requests,
+		},
+		Memory: store,
+		ToolExecutor: NewSafeToolExecutor(SafeToolConfig{
+			WorkspaceRoot:   root,
+			MaxContextChars: 12000,
+			Config:          cfg,
+			Profile:         profile,
+			WorkspaceGrants: grantStore,
+		}),
+	}
+
+	var output string
+	var completedTool string
+	err = service.Chat(ctx, ChatInput{
+		ConversationID: conversation.ID,
+		Content:        "apply it",
+	}, func(event Event) error {
+		if event.Type == EventModelToken {
+			output += event.Token
+		}
+		if event.Type == EventToolCompleted {
+			completedTool = event.Data["tool_name"]
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("Chat(apply it) error = %v", err)
+	}
+	if len(requests) != 0 {
+		t.Fatalf("model requests = %d, want 0", len(requests))
+	}
+	if completedTool != "approved_edit_file" {
+		t.Fatalf("completed tool = %q, want approved_edit_file", completedTool)
+	}
+	written, err := os.ReadFile(targetPath)
+	if err != nil {
+		t.Fatalf("read applied file: %v", err)
+	}
+	if string(written) != proposal.Content {
+		t.Fatalf("written content = %q, want %q", string(written), proposal.Content)
+	}
+	if !strings.Contains(output, "Approval received. I applied the approved edit to `"+targetPath+"`.") ||
+		!strings.Contains(output, "Verification: pass.") {
+		t.Fatalf("output = %q, want grounded apply success", output)
+	}
+	runs, err := store.ListToolRunsForConversation(ctx, conversation.ID, 50)
+	if err != nil {
+		t.Fatalf("ListToolRunsForConversation() error = %v", err)
+	}
+	var sawDecision bool
+	var sawResult bool
+	for _, run := range runs {
+		switch run.ToolName {
+		case "permission_decision":
+			if permissionRunHasRequestID(run.Input, request.RequestID) && run.Status == "approved" {
+				sawDecision = true
+			}
+		case "approved_edit_file":
+			if run.Status == "completed" {
+				sawResult = true
+			}
+		}
+	}
+	if !sawDecision {
+		t.Fatal("permission_decision was not saved")
+	}
+	if !sawResult {
+		t.Fatal("approved_edit_file result was not saved")
+	}
+	stored, ok, err := store.GetConversationRouteState(ctx, conversation.ID)
+	if err != nil {
+		t.Fatalf("GetConversationRouteState() error = %v", err)
+	}
+	if !ok {
+		t.Fatal("route state missing")
+	}
+	var next routing.SessionContract
+	if err := json.Unmarshal([]byte(stored.StateJSON), &next); err != nil {
+		t.Fatalf("unmarshal route state: %v", err)
+	}
+	if next.PendingOperationID != "" || next.PendingApproval != "" || next.RouteLockStrength == "pending_operation" {
+		t.Fatalf("route state = %+v, want pending operation cleared", next)
+	}
+}
+
 func TestAskEditRequestWithoutModelDraftDoesNotEmitPermissionRequest(t *testing.T) {
 	ctx := context.Background()
 	cfg := config.Default()
@@ -1823,6 +2015,110 @@ func TestChatEditProposalSkipsOperationalAssistantMessagesForLastResponseRequest
 	}
 	if got := proposal.Data["content"]; got != strings.TrimSpace(wantedAssistant) {
 		t.Fatalf("proposal content = %q, want real previous assistant answer", got)
+	}
+}
+
+func TestPreviousAssistantContentPrefersLastFinalMessageID(t *testing.T) {
+	ctx := context.Background()
+	store, err := memory.Open(ctx, filepath.Join(t.TempDir(), "memory.sqlite"))
+	if err != nil {
+		t.Fatalf("memory.Open() error = %v", err)
+	}
+	defer store.Close()
+	conversation, err := store.CreateConversation(ctx, "last final id")
+	if err != nil {
+		t.Fatalf("CreateConversation() error = %v", err)
+	}
+	final, err := store.SaveMessage(ctx, memory.Message{ConversationID: conversation.ID, Role: "assistant", Content: "Exact final answer", Model: "local-model"})
+	if err != nil {
+		t.Fatalf("SaveMessage(final) error = %v", err)
+	}
+	if _, err := store.SaveMessage(ctx, memory.Message{ConversationID: conversation.ID, Role: "assistant", Content: "Approval recorded. File edits still need the diff and snapshot flow before I apply anything.", Model: "local-model"}); err != nil {
+		t.Fatalf("SaveMessage(operational) error = %v", err)
+	}
+	saveRouteStateForLastFinalTest(t, ctx, store, conversation.ID, final.ID)
+	service := &Service{Memory: store}
+	content, ok, err := service.previousAssistantContentForEdit(ctx, conversation.ID, "")
+	if err != nil {
+		t.Fatalf("previousAssistantContentForEdit() error = %v", err)
+	}
+	if !ok || content != "Exact final answer" {
+		t.Fatalf("content=%q ok=%t, want exact LastFinalMessageID answer", content, ok)
+	}
+}
+
+func TestPreviousAssistantContentFallsBackWhenLastFinalMessageIDIsStale(t *testing.T) {
+	ctx := context.Background()
+	store, err := memory.Open(ctx, filepath.Join(t.TempDir(), "memory.sqlite"))
+	if err != nil {
+		t.Fatalf("memory.Open() error = %v", err)
+	}
+	defer store.Close()
+	conversation, err := store.CreateConversation(ctx, "stale last final id")
+	if err != nil {
+		t.Fatalf("CreateConversation() error = %v", err)
+	}
+	if _, err := store.SaveMessage(ctx, memory.Message{ConversationID: conversation.ID, Role: "assistant", Content: "Fallback final answer", Model: "local-model"}); err != nil {
+		t.Fatalf("SaveMessage(final) error = %v", err)
+	}
+	if _, err := store.SaveMessage(ctx, memory.Message{ConversationID: conversation.ID, Role: "assistant", Content: "I could not use file_stat: path is outside workspace", Model: "local-model"}); err != nil {
+		t.Fatalf("SaveMessage(operational) error = %v", err)
+	}
+	saveRouteStateForLastFinalTest(t, ctx, store, conversation.ID, "msg_missing")
+	service := &Service{Memory: store}
+	content, ok, err := service.previousAssistantContentForEdit(ctx, conversation.ID, "")
+	if err != nil {
+		t.Fatalf("previousAssistantContentForEdit() error = %v", err)
+	}
+	if !ok || content != "Fallback final answer" {
+		t.Fatalf("content=%q ok=%t, want reverse-scan fallback answer", content, ok)
+	}
+}
+
+func TestPreviousAssistantContentRejectsLastFinalMessageIDFromAnotherConversation(t *testing.T) {
+	ctx := context.Background()
+	store, err := memory.Open(ctx, filepath.Join(t.TempDir(), "memory.sqlite"))
+	if err != nil {
+		t.Fatalf("memory.Open() error = %v", err)
+	}
+	defer store.Close()
+	first, err := store.CreateConversation(ctx, "first")
+	if err != nil {
+		t.Fatalf("CreateConversation(first) error = %v", err)
+	}
+	second, err := store.CreateConversation(ctx, "second")
+	if err != nil {
+		t.Fatalf("CreateConversation(second) error = %v", err)
+	}
+	if _, err := store.SaveMessage(ctx, memory.Message{ConversationID: first.ID, Role: "assistant", Content: "First fallback answer", Model: "local-model"}); err != nil {
+		t.Fatalf("SaveMessage(first final) error = %v", err)
+	}
+	cross, err := store.SaveMessage(ctx, memory.Message{ConversationID: second.ID, Role: "assistant", Content: "Wrong conversation answer", Model: "local-model"})
+	if err != nil {
+		t.Fatalf("SaveMessage(second final) error = %v", err)
+	}
+	saveRouteStateForLastFinalTest(t, ctx, store, first.ID, cross.ID)
+	service := &Service{Memory: store}
+	content, ok, err := service.previousAssistantContentForEdit(ctx, first.ID, "")
+	if err != nil {
+		t.Fatalf("previousAssistantContentForEdit() error = %v", err)
+	}
+	if !ok || content != "First fallback answer" {
+		t.Fatalf("content=%q ok=%t, want same-conversation fallback answer", content, ok)
+	}
+}
+
+func saveRouteStateForLastFinalTest(t *testing.T, ctx context.Context, store *memory.Store, conversationID string, messageID string) {
+	t.Helper()
+	state, err := json.Marshal(routing.SessionContract{
+		LastFinalMessageID: messageID,
+		UpdatedAt:          time.Now().UTC().Format(time.RFC3339Nano),
+	})
+	if err != nil {
+		t.Fatalf("Marshal(route state) error = %v", err)
+	}
+	if _, err := store.SaveConversationRouteState(ctx, memory.ConversationRouteState{ConversationID: conversationID, StateJSON: string(state)}); err != nil {
+		t.Fatalf("SaveConversationRouteState() error = %v", err)
 	}
 }
 

@@ -8,7 +8,7 @@ import {
   shouldStorePermissionItem,
   upsertPermissionItem
 } from './permissionStreamHelpers';
-import { asArray } from './uiHelpers';
+import { asArray, productToolLabel } from './uiHelpers';
 
 export type PermissionControllerContext = {
   getPermissionItems: () => PermissionItem[];
@@ -75,19 +75,19 @@ export function createPermissionController(ctx: PermissionControllerContext) {
     try {
       const result = await recordPermissionDecision(item, decision);
       markPermissionSettled(item.requestId, decision);
-      ctx.pushActivity(`permission ${decision}: ${item.toolName}`);
+      ctx.pushActivity(`Approval ${decision}: ${productToolLabel(item.toolName)}`);
       if (result?.message) {
         const persistedMessage: ChatMessage = {
           id: result.assistantMessageId || undefined,
           role: 'assistant',
           content: result.message,
-          model: result.toolName || item.toolName || 'yemaka-executor',
+          model: 'yemaka-executor',
           sourceKind: result.result?.sourceKind || result.result?.SourceKind || 'tool',
           sources: asArray(result.result?.sources || result.result?.Sources),
           parentId: result.parentMessageId || item.assistantMessageId || item.userMessageId || item.parentMessageId,
           variantIndex: result.variantIndex,
           activeVariant: result.activeVariant,
-          trace: [`permission ${decision}: ${item.toolName}`, result.executed ? 'approved tool executed' : 'approval recorded']
+          trace: [`permission: ${decision} ${item.toolName}`, result.executed ? `tool: ${item.toolName} (completed)` : 'approval recorded']
         };
         ctx.setMessages(upsertPermissionResultMessage(ctx.getMessages(), persistedMessage, item.assistantMessageId || item.userMessageId || ''));
       }
@@ -96,7 +96,7 @@ export function createPermissionController(ctx: PermissionControllerContext) {
       const message = err instanceof Error ? err.message : String(err);
       if (permissionDecisionErrorIsStale(message)) {
         markPermissionSettled(item.requestId, decision);
-        ctx.pushActivity(`permission refreshed: ${item.toolName}`);
+        ctx.pushActivity(`Approval refreshed: ${productToolLabel(item.toolName)}`);
         await ctx.refreshToolRuns();
       } else {
         ctx.setError(message);

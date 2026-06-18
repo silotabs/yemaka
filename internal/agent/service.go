@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"strconv"
 	"strings"
@@ -205,6 +206,12 @@ func (s *Service) Chat(ctx context.Context, input ChatInput, emit EventHandler) 
 	if err := emitPlanEvents(emit, plan); err != nil {
 		return err
 	}
+	if handled, err := s.handleSelectedRouteCorrectionChat(ctx, conversation.ID, userMessage.ID, "", input.Content, "", "", plan, runMeta, &userMessage, emit); err != nil {
+		_ = emit(Event{Type: EventAgentError, Message: err.Error()})
+		return err
+	} else if handled {
+		return nil
+	}
 	if plan.NeedsClarification {
 		return s.completeWithoutModel(ctx, conversation.ID, runMeta, "", input.Content, "", "", plan, ExecutionDecision{Status: ExecutionNotRequired, RiskLevel: plan.RiskLevel}, nil, nil, ClarificationResponse(plan), &userMessage, emit)
 	}
@@ -275,7 +282,8 @@ func (s *Service) Chat(ctx context.Context, input ChatInput, emit EventHandler) 
 	promptOptions := responseBehavior.applyPromptOptions(s.promptOptions())
 	messages, promptContext := PromptMessagesWithDiagnostics(plan, planInput, system, promptOptions)
 
-	streamFirst := shouldStreamInitialModelOutput(editProposal, executionResult)
+	streamFirst := shouldStreamInitialModelOutput(plan, editProposal, executionResult)
+	emitAfterGrounding := shouldEmitBufferedAfterGrounding(plan, streamFirst)
 	modelTrace := responseBehavior.ModelResponseTrace
 	assistantContent, responseModel, err := s.runModelWithFallback(ctx, selected, messages, emit, streamFirst, &modelTrace, responseBehavior, modelToolDefinitions)
 	if err != nil {
@@ -294,7 +302,7 @@ func (s *Service) Chat(ctx context.Context, input ChatInput, emit EventHandler) 
 		}
 	}
 	assistantContent = PrepareAssistantPresentation(assistantContent, decision, executionResult)
-	editProposal, assistantContent, err = s.finalizeEditProposalDraftOutput(ctx, conversation.ID, runMeta, emit, decision, editProposal, assistantContent, streamFirst)
+	editProposal, assistantContent, err = s.finalizeEditProposalDraftOutput(ctx, conversation.ID, runMeta, emit, decision, editProposal, assistantContent, streamFirst || emitAfterGrounding)
 	if err != nil {
 		_ = emit(Event{Type: EventAgentError, Message: err.Error()})
 		return err
@@ -304,7 +312,13 @@ func (s *Service) Chat(ctx context.Context, input ChatInput, emit EventHandler) 
 		return err
 	}
 	assistantContent = PrepareAssistantPresentation(assistantContent, decision, executionResult)
-	verification := VerifyResponse(plan, assistantContent)
+	assistantContent = GroundUnsupportedActionClaim(assistantContent, plan, decision, executionResult)
+	if emitAfterGrounding {
+		if err := emitBufferedModelContent(emit, assistantContent); err != nil {
+			return err
+		}
+	}
+	verification := VerifyResponseWithEvidence(plan, assistantContent, decision, executionResult)
 	verification = VerifyEditProposal(verification, editProposal)
 	if err := emitVerification(emit, verification); err != nil {
 		return err
@@ -331,6 +345,10 @@ func (s *Service) Chat(ctx context.Context, input ChatInput, emit EventHandler) 
 		assistantMessageID = assistantMessage.ID
 		assistantVariantIndex = assistantMessage.VariantIndex
 		if err := emit(messageSavedEvent(conversation.ID, assistantMessage, assistantContent)); err != nil {
+			return err
+		}
+		if err := s.markRoutingLastFinalMessage(ctx, conversation.ID, assistantMessage, plan, decision, executionResult, verification); err != nil {
+			_ = emit(Event{Type: EventAgentError, Message: err.Error()})
 			return err
 		}
 	}
@@ -502,6 +520,12 @@ func (s *Service) Ask(ctx context.Context, input AskInput, emit EventHandler) er
 	if err := emitPlanEvents(emit, plan); err != nil {
 		return err
 	}
+	if handled, err := s.handleSelectedRouteCorrectionChat(ctx, conversation.ID, userMessage.ID, input.ParentMessageID, input.Content, input.SkillName, input.SkillVersion, plan, runMeta, &userMessage, emit); err != nil {
+		_ = emit(Event{Type: EventAgentError, Message: err.Error()})
+		return err
+	} else if handled {
+		return nil
+	}
 	if plan.NeedsClarification {
 		return s.completeWithoutModel(ctx, conversation.ID, runMeta, input.ParentMessageID, input.Content, input.SkillName, input.SkillVersion, plan, ExecutionDecision{Status: ExecutionNotRequired, RiskLevel: plan.RiskLevel}, nil, nil, ClarificationResponse(plan), &userMessage, emit)
 	}
@@ -595,7 +619,8 @@ func (s *Service) Ask(ctx context.Context, input AskInput, emit EventHandler) er
 	promptOptions := responseBehavior.applyPromptOptions(s.promptOptions())
 	messages, promptContext := PromptMessagesWithDiagnostics(plan, planInput, system, promptOptions)
 
-	streamFirst := shouldStreamInitialModelOutput(editProposal, executionResult)
+	streamFirst := shouldStreamInitialModelOutput(plan, editProposal, executionResult)
+	emitAfterGrounding := shouldEmitBufferedAfterGrounding(plan, streamFirst)
 	modelTrace := responseBehavior.ModelResponseTrace
 	assistantContent, responseModel, err := s.runModelWithFallback(ctx, selected, messages, emit, streamFirst, &modelTrace, responseBehavior, modelToolDefinitions)
 	if err != nil {
@@ -614,7 +639,7 @@ func (s *Service) Ask(ctx context.Context, input AskInput, emit EventHandler) er
 		}
 	}
 	assistantContent = PrepareAssistantPresentation(assistantContent, decision, executionResult)
-	editProposal, assistantContent, err = s.finalizeEditProposalDraftOutput(ctx, conversation.ID, runMeta, emit, decision, editProposal, assistantContent, streamFirst)
+	editProposal, assistantContent, err = s.finalizeEditProposalDraftOutput(ctx, conversation.ID, runMeta, emit, decision, editProposal, assistantContent, streamFirst || emitAfterGrounding)
 	if err != nil {
 		_ = emit(Event{Type: EventAgentError, Message: err.Error()})
 		return err
@@ -624,7 +649,13 @@ func (s *Service) Ask(ctx context.Context, input AskInput, emit EventHandler) er
 		return err
 	}
 	assistantContent = PrepareAssistantPresentation(assistantContent, decision, executionResult)
-	verification := VerifyResponse(plan, assistantContent)
+	assistantContent = GroundUnsupportedActionClaim(assistantContent, plan, decision, executionResult)
+	if emitAfterGrounding {
+		if err := emitBufferedModelContent(emit, assistantContent); err != nil {
+			return err
+		}
+	}
+	verification := VerifyResponseWithEvidence(plan, assistantContent, decision, executionResult)
 	verification = VerifyEditProposal(verification, editProposal)
 	if err := emitVerification(emit, verification); err != nil {
 		return err
@@ -651,6 +682,10 @@ func (s *Service) Ask(ctx context.Context, input AskInput, emit EventHandler) er
 		assistantMessageID = assistantMessage.ID
 		assistantVariantIndex = assistantMessage.VariantIndex
 		if err := emit(messageSavedEvent(conversation.ID, assistantMessage, assistantContent)); err != nil {
+			return err
+		}
+		if err := s.markRoutingLastFinalMessage(ctx, conversation.ID, assistantMessage, plan, decision, executionResult, verification); err != nil {
+			_ = emit(Event{Type: EventAgentError, Message: err.Error()})
 			return err
 		}
 	}
@@ -818,6 +853,7 @@ func (s *Service) attachConversationContext(ctx context.Context, conversationID 
 	if err != nil {
 		return err
 	}
+	messages = memory.ActiveConversationMessages(messages)
 	if len(messages) == 0 {
 		return nil
 	}
@@ -994,6 +1030,9 @@ func (s *Service) ensureConversation(ctx context.Context, conversationID string,
 }
 
 func (s *Service) resolveExecution(ctx context.Context, conversationID string, meta toolRunMetadata, plan Plan, input *PlanInput, emit EventHandler) (ExecutionDecision, *ExecutionResult, *EditProposal, string, bool, error) {
+	if decision, result, response, handled, err := s.resolvePendingOperationApproval(ctx, conversationID, meta, plan, input, emit); handled || err != nil {
+		return decision, result, nil, response, handled, err
+	}
 	decision := DecideExecutionWithPolicyMode(plan, *input, s.PolicyMode)
 	decision = s.applyToolAvailability(decision)
 	decision = ensurePermissionDecisionRequestID(decision)
@@ -1102,6 +1141,157 @@ func (s *Service) resolveExecution(ctx context.Context, conversationID string, m
 	return decision, nil, editProposal, "", false, nil
 }
 
+func (s *Service) resolvePendingOperationApproval(ctx context.Context, conversationID string, meta toolRunMetadata, plan Plan, input *PlanInput, emit EventHandler) (ExecutionDecision, *ExecutionResult, string, bool, error) {
+	if input == nil || plan.ContinuationMode != routing.ContinuationModeApprovePendingAction {
+		return ExecutionDecision{}, nil, "", false, nil
+	}
+	requestID := strings.TrimSpace(input.SessionContract.PendingOperationID)
+	if requestID == "" {
+		return ExecutionDecision{}, nil, "", false, nil
+	}
+	request, ok, err := s.pendingPermissionRequest(ctx, conversationID, requestID)
+	if err != nil || !ok {
+		return ExecutionDecision{}, nil, "", ok, err
+	}
+	if err := ValidateStoredPermissionApproval(ctx, s.Memory, request); err != nil {
+		decision := ExecutionDecision{
+			Status:    ExecutionBlocked,
+			RequestID: request.RequestID,
+			ToolName:  request.ToolName,
+			Command:   append([]string{}, request.Command...),
+			RiskLevel: request.RiskLevel,
+			Reason:    err.Error(),
+		}
+		return decision, &ExecutionResult{Context: err.Error(), Status: "failed", SourceKind: "tool"}, FriendlyBlockedDecisionResponse(decision), true, nil
+	}
+	switch normalizeToolName(request.ToolName) {
+	case "edit_file":
+		return s.resolveApprovedEditFile(ctx, conversationID, meta, request, emit)
+	default:
+		decision := ExecutionDecision{
+			Status:    ExecutionBlocked,
+			RequestID: request.RequestID,
+			ToolName:  request.ToolName,
+			Command:   append([]string{}, request.Command...),
+			RiskLevel: request.RiskLevel,
+			Reason:    "pending operation approval is not implemented for " + request.ToolName,
+		}
+		return decision, &ExecutionResult{Context: decision.Reason, Status: "blocked", SourceKind: "tool"}, FriendlyBlockedDecisionResponse(decision), true, nil
+	}
+}
+
+func (s *Service) pendingPermissionRequest(ctx context.Context, conversationID string, requestID string) (PermissionRequest, bool, error) {
+	if s == nil || s.Memory == nil {
+		return PermissionRequest{}, false, fmt.Errorf("pending operation cannot be approved without memory storage")
+	}
+	runs, err := s.Memory.ListToolRunsForConversation(ctx, conversationID, 200)
+	if err != nil {
+		return PermissionRequest{}, false, fmt.Errorf("load pending permission request: %w", err)
+	}
+	for _, run := range runs {
+		if normalizeToolName(run.ToolName) != "permission_request" {
+			continue
+		}
+		request, ok := permissionRequestFromStoredValue(run.Output)
+		if ok && strings.TrimSpace(request.RequestID) == requestID {
+			return request, true, nil
+		}
+	}
+	return PermissionRequest{}, false, nil
+}
+
+func (s *Service) resolveApprovedEditFile(ctx context.Context, conversationID string, meta toolRunMetadata, request PermissionRequest, emit EventHandler) (ExecutionDecision, *ExecutionResult, string, bool, error) {
+	proposal, ok, err := StoredReadyEditProposalForPermission(ctx, s.Memory, request)
+	if err != nil {
+		return ExecutionDecision{}, nil, "", true, err
+	}
+	if !ok {
+		decision := ExecutionDecision{
+			Status:    ExecutionBlocked,
+			RequestID: request.RequestID,
+			ToolName:  request.ToolName,
+			Command:   append([]string{}, request.Command...),
+			RiskLevel: request.RiskLevel,
+			Reason:    "approved edit could not find a ready stored diff proposal",
+		}
+		return decision, &ExecutionResult{Context: decision.Reason, Status: "blocked", SourceKind: "tool"}, FriendlyBlockedDecisionResponse(decision), true, nil
+	}
+	decision := ExecutionDecision{
+		Status:    ExecutionReady,
+		RequestID: request.RequestID,
+		ToolName:  "approved_edit_file",
+		Command:   []string{"approved_edit_file", proposal.Path, proposal.Content},
+		RiskLevel: firstNonEmptyString(request.RiskLevel, RiskMedium),
+		Reason:    "user approved the pending edit_file operation after a stored diff preview",
+	}
+	if err := emitExecutionDecision(emit, decision); err != nil {
+		return decision, nil, "", true, err
+	}
+	if err := s.savePermissionDecision(ctx, conversationID, meta, request, "approved from chat"); err != nil {
+		return decision, nil, "", true, err
+	}
+	if s.ToolExecutor == nil {
+		result := &ExecutionResult{Context: "approved edit executor is unavailable", Status: "failed", SourceKind: "tool"}
+		return decision, result, approvedEditFailureResponse(request, result.Context), true, nil
+	}
+	result, err := s.ToolExecutor(ctx, decision)
+	if err != nil {
+		failed := &ExecutionResult{Context: FriendlyToolFailureSummary(decision, err), Status: "failed", SourceKind: "tool"}
+		return decision, failed, approvedEditFailureResponse(request, err.Error()), true, nil
+	}
+	if err := emitToolCompleted(emit, decision, result); err != nil {
+		return decision, nil, "", true, err
+	}
+	return decision, &result, approvedEditSuccessResponse(proposal, result), true, nil
+}
+
+func (s *Service) savePermissionDecision(ctx context.Context, conversationID string, meta toolRunMetadata, request PermissionRequest, note string) error {
+	if s == nil || s.Memory == nil {
+		return nil
+	}
+	_, err := s.Memory.SaveToolRun(ctx, toolRunWithMetadata(conversationID, meta, memory.ToolRun{
+		ToolName:  "permission_decision",
+		Input:     request,
+		Output:    map[string]any{"decision": "approved", "note": strings.TrimSpace(note)},
+		Status:    "approved",
+		RiskLevel: request.RiskLevel,
+	}))
+	return err
+}
+
+func approvedEditSuccessResponse(proposal EditProposal, result ExecutionResult) string {
+	path := strings.TrimSpace(proposal.Path)
+	if len(result.Sources) > 0 && strings.TrimSpace(result.Sources[0]) != "" {
+		path = strings.TrimSpace(result.Sources[0])
+	}
+	if path == "" {
+		path = "the approved file"
+	}
+	response := "Approval received. I applied the approved edit to `" + path + "`."
+	if snapshot := fieldFromToolContext(result.Context, "snapshot_id"); snapshot != "" {
+		response += " Snapshot: `" + snapshot + "`."
+	}
+	if verification := fieldFromToolContext(result.Context, "verification"); verification != "" {
+		response += " Verification: " + verification + "."
+	}
+	return response
+}
+
+func approvedEditFailureResponse(request PermissionRequest, reason string) string {
+	tool := firstNonEmptyString(request.ToolName, "edit_file")
+	return "Approval received, but `" + tool + "` could not run: " + strings.TrimSpace(reason)
+}
+
+func fieldFromToolContext(context string, field string) string {
+	prefix := strings.TrimSpace(field) + ":"
+	for _, line := range strings.Split(context, "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), prefix) {
+			return strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), prefix))
+		}
+	}
+	return ""
+}
+
 func (s *Service) completeAppendLineEditProposal(ctx context.Context, conversationID string, meta toolRunMetadata, proposal *EditProposal, input PlanInput, emit EventHandler) error {
 	if s == nil || s.ToolExecutor == nil || proposal == nil || strings.TrimSpace(proposal.Path) == "" {
 		return nil
@@ -1179,6 +1369,9 @@ func (s *Service) completePreviousAssistantEditProposal(ctx context.Context, con
 }
 
 func (s *Service) previousAssistantContentForEdit(ctx context.Context, conversationID string, currentMessageID string) (string, bool, error) {
+	if content, ok, err := s.previousAssistantContentFromLastFinalMessageID(ctx, conversationID, currentMessageID); err != nil || ok {
+		return content, ok, err
+	}
 	messages, err := s.Memory.ListConversationMessages(ctx, conversationID, 80)
 	if err != nil {
 		return "", false, err
@@ -1201,6 +1394,49 @@ func (s *Service) previousAssistantContentForEdit(ctx context.Context, conversat
 		}
 	}
 	return "", false, nil
+}
+
+func (s *Service) previousAssistantContentFromLastFinalMessageID(ctx context.Context, conversationID string, currentMessageID string) (string, bool, error) {
+	if s == nil || s.Memory == nil || strings.TrimSpace(conversationID) == "" {
+		return "", false, nil
+	}
+	stored, ok, err := s.Memory.GetConversationRouteState(ctx, conversationID)
+	if err != nil || !ok {
+		return "", false, err
+	}
+	var contract routing.SessionContract
+	if err := json.Unmarshal([]byte(stored.StateJSON), &contract); err != nil {
+		return "", false, nil
+	}
+	if strings.TrimSpace(contract.UpdatedAt) == "" {
+		contract.UpdatedAt = stored.UpdatedAt
+	}
+	contract = routing.SanitizeSessionContract(contract, time.Now())
+	messageID := strings.TrimSpace(contract.LastFinalMessageID)
+	if messageID == "" || messageID == strings.TrimSpace(currentMessageID) {
+		return "", false, nil
+	}
+	message, err := s.Memory.GetMessage(ctx, messageID)
+	if err != nil {
+		if strings.Contains(err.Error(), "message not found") {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	if !assistantMessageCanBePreviousEditArtifact(message, conversationID) {
+		return "", false, nil
+	}
+	return strings.TrimSpace(message.Content), true, nil
+}
+
+func assistantMessageCanBePreviousEditArtifact(message memory.Message, conversationID string) bool {
+	if strings.TrimSpace(message.ID) == "" ||
+		strings.TrimSpace(message.ConversationID) != strings.TrimSpace(conversationID) ||
+		strings.TrimSpace(message.Role) != "assistant" ||
+		!message.ActiveVariant {
+		return false
+	}
+	return usablePreviousAssistantEditContent(strings.TrimSpace(message.Content))
 }
 
 func looksLikePreviousAssistantContentRequest(content string) bool {
@@ -1611,8 +1847,24 @@ func (s *Service) capabilityGapResponse(plan Plan, input PlanInput, decision Exe
 	return proposal.Response(), true, nil
 }
 
-func shouldStreamInitialModelOutput(proposal *EditProposal, result *ExecutionResult) bool {
+func shouldStreamInitialModelOutput(plan Plan, proposal *EditProposal, result *ExecutionResult) bool {
+	if actionClaimRiskRoute(plan) {
+		return false
+	}
 	return result == nil && (proposal == nil || !proposal.NeedsContent)
+}
+
+func shouldEmitBufferedAfterGrounding(plan Plan, streamFirst bool) bool {
+	return !streamFirst && actionClaimRiskRoute(plan)
+}
+
+func actionClaimRiskRoute(plan Plan) bool {
+	return plan.RouteRequiresApproval ||
+		plan.RouteWritesFiles ||
+		plan.RouteGeneratesExtension ||
+		plan.RouteCreatesSchedulerJob ||
+		plan.RouteConnectorAction ||
+		plan.RouteCrawlerTask
 }
 
 func (s *Service) finalizeEditProposalDraftOutput(ctx context.Context, conversationID string, meta toolRunMetadata, emit EventHandler, decision ExecutionDecision, proposal *EditProposal, assistantContent string, streamed bool) (*EditProposal, string, error) {
@@ -1898,6 +2150,7 @@ func (s *Service) completeWithoutModel(ctx context.Context, conversationID strin
 		_ = emit(Event{Type: EventAgentError, Message: err.Error()})
 		return err
 	}
+	needsLocalTurn := strings.TrimSpace(meta.UserMessageID) == ""
 	var userMessage memory.Message
 	if acceptedUserMessage != nil && acceptedUserMessage.ID != "" {
 		userMessage = *acceptedUserMessage
@@ -1932,8 +2185,22 @@ func (s *Service) completeWithoutModel(ctx context.Context, conversationID strin
 			return err
 		}
 	}
+	if needsLocalTurn {
+		meta.UserMessageID = userMessage.ID
+		meta.ParentMessageID = userMessage.ID
+		turn, err := s.startAgentTurn(ctx, conversation.ID, meta)
+		if err != nil {
+			_ = emit(Event{Type: EventAgentError, Message: err.Error()})
+			return err
+		}
+		if turn.ID != "" {
+			defer s.markRunningAgentTurnInterrupted(context.WithoutCancel(ctx), turn.ID)
+			emit = s.trackAgentTurn(ctx, turn.ID, emit)
+		}
+	}
 	assistantContent = PrepareAssistantPresentation(assistantContent, decision, result)
-	verification := VerifyResponse(plan, assistantContent)
+	assistantContent = GroundUnsupportedActionClaim(assistantContent, plan, decision, result)
+	verification := VerifyResponseWithEvidence(plan, assistantContent, decision, result)
 	verification = VerifyEditProposal(verification, editProposal)
 	if err := emitVerification(emit, verification); err != nil {
 		return err
@@ -1975,6 +2242,10 @@ func (s *Service) completeWithoutModel(ctx context.Context, conversationID strin
 		return err
 	}
 	if err := emit(messageSavedEvent(conversation.ID, assistantMessage, assistantContent)); err != nil {
+		return err
+	}
+	if err := s.markRoutingLastFinalMessage(ctx, conversation.ID, assistantMessage, plan, decision, result, verification); err != nil {
+		_ = emit(Event{Type: EventAgentError, Message: err.Error()})
 		return err
 	}
 	meta.UserMessageID = userMessage.ID

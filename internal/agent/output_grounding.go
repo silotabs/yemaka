@@ -19,6 +19,34 @@ func PrepareAssistantPresentation(content string, decision ExecutionDecision, re
 	return cleaned
 }
 
+func GroundUnsupportedActionClaim(content string, plan Plan, decision ExecutionDecision, result *ExecutionResult) string {
+	cleaned := strings.TrimSpace(content)
+	if cleaned == "" {
+		return cleaned
+	}
+	verb := unsupportedAssistantActionClaim(plan, strings.ToLower(cleaned))
+	if verb == "" {
+		return cleaned
+	}
+	if trustedActionEvidenceSupportsClaim(verb, decision, result) {
+		return cleaned
+	}
+	target := strings.TrimSpace(firstPlanFile(plan))
+	if target != "" {
+		return "That " + verb + " action for `" + target + "` is unverified because I do not have trusted tool evidence for it. I did not perform the requested action in this response. Treat it as pending until the appropriate approved tool flow completes."
+	}
+	return "That " + verb + " action is unverified because I do not have trusted tool evidence for it. I did not perform the requested action in this response. Treat it as pending until the appropriate approved tool flow completes."
+}
+
+func firstPlanFile(plan Plan) string {
+	for _, file := range plan.FilesNeeded {
+		if strings.TrimSpace(file) != "" {
+			return strings.TrimSpace(file)
+		}
+	}
+	return ""
+}
+
 func GroundCompletedToolResponse(content string, decision ExecutionDecision, result *ExecutionResult) string {
 	if result == nil || !strings.EqualFold(strings.TrimSpace(result.Status), "completed") {
 		return content

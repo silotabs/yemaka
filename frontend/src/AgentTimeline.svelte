@@ -1,6 +1,7 @@
 <script lang="ts">
   import { AnimatePresence, MotionDiv } from '@humanspeak/svelte-motion';
   import Icon from './Icon.svelte';
+  import { productStatusLabel, productToolLabel } from './lib/uiHelpers';
 
   export let trace: string[] = [];
   export let active = false;
@@ -29,7 +30,14 @@
   }
 
   function cleanToolName(value: string) {
-    return titleCase(value.replace(/\(.+\)$/, '').trim());
+    return productToolLabel(value.replace(/\(.+\)$/, '').trim());
+  }
+
+  function toolTraceDetail(value: string) {
+    const clean = value.trim();
+    const match = clean.match(/^(.+?)\s*\(([^)]+)\)$/);
+    if (!match) return cleanToolName(clean);
+    return `${productToolLabel(match[1])}: ${productStatusLabel(match[2], 'Completed')}`;
   }
 
   function normalizeTrace(line: string, index: number, total: number): TimelineItem {
@@ -47,7 +55,7 @@
     if (lower.startsWith('model:')) {
       item = { ...item, label: 'Model selected', detail: afterColon(clean), icon: 'models', status: 'done' };
     } else if (lower.startsWith('model tool call:')) {
-      item = { ...item, label: 'Model requested tool', detail: afterColon(clean), icon: 'tools', status: active && isLatest ? 'active' : 'done' };
+      item = { ...item, label: 'Tool request prepared', detail: afterColon(clean), icon: 'tools', status: active && isLatest ? 'active' : 'done' };
     } else if (lower.startsWith('task:')) {
       item = { ...item, label: 'Understanding task', detail: afterColon(clean), icon: 'chat', status: active && isLatest ? 'active' : 'done' };
     } else if (lower.startsWith('plan:')) {
@@ -61,21 +69,26 @@
       const tool = parts.join(' ');
       item = {
         ...item,
-        label: status === 'ready' ? `Preparing ${cleanToolName(tool || 'tool')}` : titleCase(`Executor ${status}`),
-        detail: tool ? cleanToolName(tool) : detail,
+        label:
+          status === 'not_required'
+            ? 'No local action needed'
+            : status === 'ready' || status === 'decided'
+              ? 'Local action selected'
+              : `Local action ${productStatusLabel(status, status).toLowerCase()}`,
+        detail: tool ? cleanToolName(tool) : status === 'not_required' ? '' : detail,
         icon: 'tools',
-        status: active && isLatest && status !== 'skipped' ? 'active' : 'done'
+        status: active && isLatest && status !== 'skipped' && status !== 'not_required' ? 'active' : 'done'
       };
     } else if (lower.startsWith('capability:')) {
       item = { ...item, label: 'Capability proposed', detail: afterColon(clean), icon: 'extensions', status: 'needs' };
     } else if (lower.startsWith('permission needed:')) {
-      item = { ...item, label: 'Permission needed', detail: afterColon(clean), icon: 'health', status: 'needs' };
+      item = { ...item, label: 'Approval required', detail: cleanToolName(afterColon(clean)), icon: 'health', status: 'needs' };
     } else if (lower.startsWith('permission:')) {
-      item = { ...item, label: 'Permission check', detail: afterColon(clean), icon: 'health', status: 'needs' };
+      item = { ...item, label: 'Approval check', detail: afterColon(clean), icon: 'health', status: 'needs' };
     } else if (lower.startsWith('edit proposed:')) {
-      item = { ...item, label: 'Edit proposed', detail: afterColon(clean), icon: 'write', status: 'needs' };
+      item = { ...item, label: 'File change prepared', detail: afterColon(clean), icon: 'write', status: 'needs' };
     } else if (lower.startsWith('tool:') || lower.startsWith('tool completed:')) {
-      item = { ...item, label: 'Tool completed', detail: cleanToolName(afterColon(clean)), icon: 'tools', status: 'done' };
+      item = { ...item, label: 'Local action completed', detail: toolTraceDetail(afterColon(clean)), icon: 'tools', status: 'done' };
     } else if (lower.startsWith('workspace:')) {
       item = { ...item, label: 'Workspace context', detail: afterColon(clean), icon: 'documents', status: 'done' };
     } else if (lower.startsWith('rag:')) {
@@ -88,7 +101,7 @@
       item = { ...item, label: 'Fallback model used', detail: afterColon(clean), icon: 'models', status: 'done' };
     } else if (lower.startsWith('verification:')) {
       const detail = afterColon(clean);
-      item = { ...item, label: 'Verification', detail, icon: 'health', status: detail.toLowerCase().includes('pass') ? 'done' : 'needs' };
+      item = { ...item, label: 'Result check', detail: productStatusLabel(detail, detail), icon: 'health', status: detail.toLowerCase().includes('pass') ? 'done' : 'needs' };
     }
 
     if (!active && item.status === 'active') {

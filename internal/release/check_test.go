@@ -1,6 +1,7 @@
 package release
 
 import (
+	"archive/zip"
 	"context"
 	"os"
 	"path/filepath"
@@ -420,6 +421,54 @@ func TestCheckDistributionArtifactsPassesWithManifestAndChecksum(t *testing.T) {
 	check := checkDistributionArtifacts(dir)
 	if check.Status != StatusPass {
 		t.Fatalf("Status = %q, want pass; details: %s", check.Status, check.Details)
+	}
+}
+
+func TestCheckDistributionArtifactsFailsForbiddenArchiveEntries(t *testing.T) {
+	dir := t.TempDir()
+	dmg := filepath.Join(dir, "Yemaka-1.0-rc-macos-arm64.dmg")
+	if err := os.WriteFile(dmg, []byte("dmg"), 0o644); err != nil {
+		t.Fatalf("WriteFile(dmg) error = %v", err)
+	}
+	if err := os.WriteFile(dmg+".sha256", []byte("checksum"), 0o644); err != nil {
+		t.Fatalf("WriteFile(sha256) error = %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "manifest.json"), []byte(`{"notarization_status":"not_submitted"}`), 0o644); err != nil {
+		t.Fatalf("WriteFile(manifest) error = %v", err)
+	}
+	writeReleaseZipForTest(t, filepath.Join(dir, "Yemaka-source.zip"), map[string]string{
+		"frontend/playwright-report/index.html": "report",
+		"profiles/default/memory.sqlite":        "sqlite",
+		".DS_Store":                             "finder",
+	})
+	check := checkDistributionArtifacts(dir)
+	if check.Status != StatusFail {
+		t.Fatalf("Status = %q, want fail; details: %s", check.Status, check.Details)
+	}
+	for _, want := range []string{"frontend/playwright-report/index.html", "memory.sqlite", ".DS_Store"} {
+		if !strings.Contains(check.Details, want) {
+			t.Fatalf("Details = %q, want forbidden entry %q", check.Details, want)
+		}
+	}
+}
+
+func writeReleaseZipForTest(t *testing.T, path string, entries map[string]string) {
+	t.Helper()
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatalf("Create(zip) error = %v", err)
+	}
+	defer file.Close()
+	writer := zip.NewWriter(file)
+	defer writer.Close()
+	for name, content := range entries {
+		entry, err := writer.Create(name)
+		if err != nil {
+			t.Fatalf("Create(%s) error = %v", name, err)
+		}
+		if _, err := entry.Write([]byte(content)); err != nil {
+			t.Fatalf("Write(%s) error = %v", name, err)
+		}
 	}
 }
 

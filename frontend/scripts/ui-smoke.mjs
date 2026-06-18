@@ -1695,12 +1695,12 @@ for (const marker of [
 }
 includes('permission exact action preview', 'function permissionCommandPreview(item: PermissionItemLike)', diagnosticHelpers);
 for (const marker of [
-  'Permissions',
+  'Approvals',
   'Exact action',
-  'Tool Activity',
+  'Activity',
   '<SectionHeader',
   'Review exact tool actions before Yemaka continues.',
-  'Live steps, approvals, and persisted local tool logs.',
+  'Live steps, approvals, and local action history.',
   '<ActionButton',
   'disabledReason="This permission decision is already being processed."',
   '<EmptyState',

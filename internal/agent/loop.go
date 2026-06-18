@@ -84,6 +84,7 @@ type Plan struct {
 	RouteAllowedTools        []string                   `json:"route_allowed_tools,omitempty"`
 	RouteBlockedTools        []string                   `json:"route_blocked_tools,omitempty"`
 	RouteCandidates          []routing.RouteCandidate   `json:"route_candidates,omitempty"`
+	MessageFrame             routing.MessageFrame       `json:"message_frame,omitempty"`
 	RouteSession             *routing.SessionContract   `json:"route_session,omitempty"`
 	RoutePreflight           *routing.PreflightCard     `json:"route_preflight,omitempty"`
 	RouteContinuation        *routing.ContinuationFrame `json:"route_continuation,omitempty"`
@@ -125,6 +126,7 @@ type RouteDecision struct {
 	AllowedToolset        []string
 	BlockedToolset        []string
 	RouteCandidates       []routing.RouteCandidate
+	MessageFrame          routing.MessageFrame
 	ContinuationMode      string
 	AmbiguityFlags        []string
 	Preflight             routing.PreflightCard
@@ -171,6 +173,7 @@ func BuildPlan(input PlanInput) Plan {
 		RouteAllowedTools:        append([]string{}, route.AllowedToolset...),
 		RouteBlockedTools:        append([]string{}, route.BlockedToolset...),
 		RouteCandidates:          append([]routing.RouteCandidate{}, route.RouteCandidates...),
+		MessageFrame:             route.MessageFrame,
 		ContinuationMode:         route.ContinuationMode,
 		AmbiguityFlags:           append([]string{}, route.AmbiguityFlags...),
 		NeedsClarification:       route.NeedsClarification,
@@ -259,6 +262,7 @@ func RouteRequest(input PlanInput) RouteDecision {
 		AllowedToolset:        append([]string{}, decision.AllowedToolset...),
 		BlockedToolset:        append([]string{}, decision.BlockedToolset...),
 		RouteCandidates:       append([]routing.RouteCandidate{}, decision.RouteCandidates...),
+		MessageFrame:          decision.MessageFrame,
 		ContinuationMode:      decision.ContinuationMode,
 		AmbiguityFlags:        append([]string{}, decision.AmbiguityFlags...),
 		Preflight:             decision.Preflight,
@@ -470,6 +474,11 @@ func VerifyResponse(plan Plan, content string) VerificationResult {
 		markNeedsFollowUp(&result)
 		result.Reasons = appendNonDuplicate(result.Reasons, "general knowledge route refused because optional local/workspace evidence was absent")
 	}
+	result.Checks = append(result.Checks, "action_claim_evidence_checked")
+	if verb := unsupportedAssistantActionClaim(plan, lowerContent); verb != "" {
+		markNeedsFollowUp(&result)
+		result.Reasons = appendNonDuplicate(result.Reasons, "assistant claimed "+verb+" without trusted tool or approval evidence")
+	}
 	if plan.TaskType == TaskRAG || len(plan.FilesNeeded) > 0 {
 		result.Checks = append(result.Checks, "grounding_expected", "source_citation_checked")
 		if len(plan.FilesNeeded) > 0 && !contentMentionsAny(cleanContent, plan.FilesNeeded) {
@@ -498,6 +507,30 @@ func VerifyResponse(plan Plan, content string) VerificationResult {
 	}
 	if len(result.Reasons) == 0 {
 		result.Reasons = append(result.Reasons, "no verifier concerns")
+	}
+	return result
+}
+
+func VerifyResponseWithEvidence(plan Plan, content string, decision ExecutionDecision, toolResult *ExecutionResult) VerificationResult {
+	result := VerifyResponse(plan, content)
+	verb := assistantActionClaimVerb(strings.ToLower(strings.TrimSpace(content)))
+	if verb == "" || !trustedActionEvidenceSupportsClaim(verb, decision, toolResult) {
+		return result
+	}
+	reason := "assistant claimed " + verb + " without trusted tool or approval evidence"
+	filtered := result.Reasons[:0]
+	removed := false
+	for _, existing := range result.Reasons {
+		if existing == reason {
+			removed = true
+			continue
+		}
+		filtered = append(filtered, existing)
+	}
+	result.Reasons = filtered
+	if removed && len(result.Reasons) == 0 {
+		result.Status = "pass"
+		result.Reasons = []string{"trusted tool evidence supports action claim"}
 	}
 	return result
 }
@@ -566,6 +599,110 @@ func looksLikeEvidenceRequiredRefusal(lowerContent string) bool {
 		strings.Contains(lowerContent, "retrieved") ||
 		strings.Contains(lowerContent, "available evidence") ||
 		strings.Contains(lowerContent, "source of truth")
+}
+
+func unsupportedAssistantActionClaim(plan Plan, lowerContent string) string {
+	verb := assistantActionClaimVerb(lowerContent)
+	if verb == "" {
+		return ""
+	}
+	if actionClaimIsClearlyPendingOrPrepared(lowerContent) {
+		return ""
+	}
+	if plan.RouteRequiresApproval ||
+		plan.RouteWritesFiles ||
+		plan.RouteGeneratesExtension ||
+		plan.RouteCreatesSchedulerJob ||
+		plan.RouteConnectorAction ||
+		plan.RouteCrawlerTask {
+		return verb
+	}
+	if len(plan.ToolsNeeded) == 0 && plan.EvidencePolicy != EvidenceToolResultRequired {
+		return verb
+	}
+	return ""
+}
+
+func assistantActionClaimVerb(lowerContent string) string {
+	claimPatterns := []struct {
+		verb       string
+		first      []string
+		standalone []string
+	}{
+		{verb: "created", first: []string{"i created", "i have created", "i've created"}, standalone: []string{"created the", "created a", "created an"}},
+		{verb: "saved", first: []string{"i saved", "i have saved", "i've saved"}, standalone: []string{"saved the", "saved a", "saved as"}},
+		{verb: "updated", first: []string{"i updated", "i have updated", "i've updated"}, standalone: []string{"updated the"}},
+		{verb: "deleted", first: []string{"i deleted", "i have deleted", "i've deleted", "i removed", "i have removed", "i've removed"}, standalone: []string{"deleted the", "removed the"}},
+		{verb: "sent", first: []string{"i sent", "i have sent", "i've sent"}, standalone: []string{"sent the"}},
+		{verb: "scheduled", first: []string{"i scheduled", "i have scheduled", "i've scheduled"}, standalone: []string{"scheduled the"}},
+		{verb: "applied", first: []string{"i applied", "i have applied", "i've applied"}, standalone: []string{"applied the", "applied it"}},
+		{verb: "verified", first: []string{"i verified", "i have verified", "i've verified"}, standalone: []string{"verified the"}},
+		{verb: "confirmed", first: []string{"i confirmed", "i have confirmed", "i've confirmed"}, standalone: []string{"confirmed:"}},
+	}
+	for _, item := range claimPatterns {
+		for _, pattern := range item.first {
+			if strings.Contains(lowerContent, pattern) {
+				return item.verb
+			}
+		}
+		if startsWithAnyActionClaim(lowerContent, item.standalone...) {
+			return item.verb
+		}
+	}
+	return ""
+}
+
+func startsWithAnyActionClaim(lowerContent string, patterns ...string) bool {
+	for _, sentence := range strings.FieldsFunc(lowerContent, func(r rune) bool {
+		return r == '\n' || r == '.' || r == '!' || r == '?'
+	}) {
+		sentence = strings.TrimSpace(strings.Trim(sentence, "`*_ "))
+		for _, pattern := range patterns {
+			if sentence == pattern || strings.HasPrefix(sentence, pattern+" ") || strings.HasPrefix(sentence, pattern+" `") {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func trustedActionEvidenceSupportsClaim(verb string, decision ExecutionDecision, result *ExecutionResult) bool {
+	if result == nil || strings.TrimSpace(result.Status) != "completed" {
+		return false
+	}
+	tool := normalizeToolName(decision.ToolName)
+	if tool == "" {
+		return false
+	}
+	switch verb {
+	case "created", "saved", "updated", "applied":
+		return tool == "write_file" || tool == "edit_file" || tool == "approved_edit_file" || tool == "permission_decision" || tool == "permission_result"
+	case "deleted":
+		return tool == "delete_file" || tool == "remove_file"
+	case "sent":
+		return strings.Contains(tool, "send") || strings.Contains(tool, "connector")
+	case "scheduled":
+		return strings.Contains(tool, "scheduler")
+	case "verified", "confirmed":
+		return tool == "write_verifier" || tool == "file_stat" || tool == "run_tests" || strings.HasSuffix(tool, "_status")
+	default:
+		return false
+	}
+}
+
+func actionClaimIsClearlyPendingOrPrepared(lowerContent string) bool {
+	return strings.Contains(lowerContent, "i have not changed") ||
+		strings.Contains(lowerContent, "i did not change") ||
+		strings.Contains(lowerContent, "not changed") ||
+		strings.Contains(lowerContent, "prepared") ||
+		strings.Contains(lowerContent, "preview") ||
+		strings.Contains(lowerContent, "pending") ||
+		strings.Contains(lowerContent, "needs your approval") ||
+		strings.Contains(lowerContent, "requires approval") ||
+		strings.Contains(lowerContent, "waiting for approval") ||
+		strings.Contains(lowerContent, "unverified") ||
+		strings.Contains(lowerContent, "not verified") ||
+		strings.Contains(lowerContent, "could not verify")
 }
 
 func contentMentionsAny(content string, values []string) bool {
@@ -978,6 +1115,12 @@ func planEventRouteData(plan Plan) map[string]string {
 		"ambiguity_flags":     strings.Join(plan.AmbiguityFlags, ", "),
 		"requires_approval":   fmt.Sprintf("%t", plan.RouteRequiresApproval),
 		"needs_clarification": fmt.Sprintf("%t", plan.NeedsClarification),
+		"message_rewrite":     fmt.Sprintf("%t", plan.MessageFrame.IsRewriteLike),
+		"message_route_teach": fmt.Sprintf("%t", plan.MessageFrame.IsRouteTeachingLike),
+		"message_apply_like":  fmt.Sprintf("%t", plan.MessageFrame.IsApplyLike),
+		"message_action":      plan.MessageFrame.RequestedAction,
+		"message_target_kind": plan.MessageFrame.TargetKind,
+		"message_target":      plan.MessageFrame.TargetValue,
 	}
 	if plan.RoutePreflight != nil {
 		data["route_source_of_truth"] = plan.RoutePreflight.SourceOfTruth

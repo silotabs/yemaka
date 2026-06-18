@@ -99,7 +99,7 @@ func TestChatRouteCorrectionProposalApprovalAndReuse(t *testing.T) {
 	}
 }
 
-func TestChatRouteCorrectionDoesNotSaveAmbiguousTeaching(t *testing.T) {
+func TestChatRouteCorrectionDoesNotHandleGenericShortCorrection(t *testing.T) {
 	ctx := context.Background()
 	store := openRouteCorrectionChatStore(t, ctx)
 	defer store.Close()
@@ -115,7 +115,11 @@ func TestChatRouteCorrectionDoesNotSaveAmbiguousTeaching(t *testing.T) {
 		t.Fatalf("SaveMessage(user) error = %v", err)
 	}
 
-	service := &Service{Memory: store}
+	service := &Service{
+		Router:  models.NewRouter(config.Default()),
+		Runtime: staticRuntime{text: "ordinary chat"},
+		Memory:  store,
+	}
 	output := ""
 	err = service.Chat(ctx, ChatInput{
 		ConversationID: conversation.ID,
@@ -124,8 +128,11 @@ func TestChatRouteCorrectionDoesNotSaveAmbiguousTeaching(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Chat(ambiguous correction) error = %v", err)
 	}
-	if !strings.Contains(output, "What should Yemaka do for similar prompts") {
-		t.Fatalf("ambiguous correction response = %q, want clarification", output)
+	if strings.Contains(output, "What should Yemaka do for similar prompts") {
+		t.Fatalf("ambiguous correction response = %q, did not expect route-correction clarification", output)
+	}
+	if !strings.Contains(output, "ordinary chat") {
+		t.Fatalf("ambiguous correction response = %q, want ordinary model response", output)
 	}
 	corrections, err := learning.ListRouteCorrections(ctx, store, 10)
 	if err != nil {
@@ -133,6 +140,95 @@ func TestChatRouteCorrectionDoesNotSaveAmbiguousTeaching(t *testing.T) {
 	}
 	if len(corrections) != 0 {
 		t.Fatalf("corrections = %+v, want none for ambiguous teaching", corrections)
+	}
+}
+
+func TestChatRouteCorrectionDoesNotHijackRewriteEditorialPrompts(t *testing.T) {
+	ctx := context.Background()
+	store := openRouteCorrectionChatStore(t, ctx)
+	defer store.Close()
+	service := &Service{
+		Router:  models.NewRouter(config.Default()),
+		Runtime: staticRuntime{text: "rewritten output"},
+		Memory:  store,
+	}
+	cases := []string{
+		"you shouldn't phrase it like that, make it better",
+		"you should make this paragraph better",
+		"make this better: hello dear sir",
+	}
+	for _, prompt := range cases {
+		t.Run(prompt, func(t *testing.T) {
+			output := ""
+			if err := service.Chat(ctx, ChatInput{Content: prompt}, collectRouteCorrectionOutput(&output)); err != nil {
+				t.Fatalf("Chat() error = %v", err)
+			}
+			if strings.Contains(output, "What should Yemaka do for similar prompts") {
+				t.Fatalf("output = %q, did not expect route-correction clarification", output)
+			}
+			if !strings.Contains(output, "rewritten output") {
+				t.Fatalf("output = %q, want normal routing/model response", output)
+			}
+		})
+	}
+	corrections, err := learning.ListRouteCorrections(ctx, store, 10)
+	if err != nil {
+		t.Fatalf("ListRouteCorrections() error = %v", err)
+	}
+	if len(corrections) != 0 {
+		t.Fatalf("corrections = %+v, want none for rewrite/editorial prompts", corrections)
+	}
+}
+
+func TestChatSamePromptDifferentConversationsRemainSeparate(t *testing.T) {
+	ctx := context.Background()
+	store := openRouteCorrectionChatStore(t, ctx)
+	defer store.Close()
+	first, err := store.CreateConversation(ctx, "first")
+	if err != nil {
+		t.Fatalf("CreateConversation(first) error = %v", err)
+	}
+	second, err := store.CreateConversation(ctx, "second")
+	if err != nil {
+		t.Fatalf("CreateConversation(second) error = %v", err)
+	}
+	service := &Service{
+		Router:  models.NewRouter(config.Default()),
+		Runtime: staticRuntime{text: "rewritten output"},
+		Memory:  store,
+	}
+	prompt := "make this better: hello dear sir"
+	for _, conversation := range []memory.Conversation{first, second} {
+		output := ""
+		if err := service.Chat(ctx, ChatInput{
+			ConversationID: conversation.ID,
+			Content:        prompt,
+		}, collectRouteCorrectionOutput(&output)); err != nil {
+			t.Fatalf("Chat(%s) error = %v", conversation.ID, err)
+		}
+		if !strings.Contains(output, "rewritten output") {
+			t.Fatalf("output = %q, want normal model response", output)
+		}
+	}
+	firstMessages, err := store.ListConversationMessages(ctx, first.ID, 10)
+	if err != nil {
+		t.Fatalf("ListConversationMessages(first) error = %v", err)
+	}
+	secondMessages, err := store.ListConversationMessages(ctx, second.ID, 10)
+	if err != nil {
+		t.Fatalf("ListConversationMessages(second) error = %v", err)
+	}
+	if len(firstMessages) != 2 || len(secondMessages) != 2 {
+		t.Fatalf("message counts first=%d second=%d, want two messages in each conversation", len(firstMessages), len(secondMessages))
+	}
+	if firstMessages[0].ConversationID != first.ID || secondMessages[0].ConversationID != second.ID {
+		t.Fatalf("messages saved to wrong conversations: first=%+v second=%+v", firstMessages, secondMessages)
+	}
+	if firstMessages[0].Content != prompt || secondMessages[0].Content != prompt {
+		t.Fatalf("user prompts were not preserved separately: first=%+v second=%+v", firstMessages[0], secondMessages[0])
+	}
+	if firstMessages[0].ID == secondMessages[0].ID {
+		t.Fatalf("same prompt in different conversations reused message id %q", firstMessages[0].ID)
 	}
 }
 

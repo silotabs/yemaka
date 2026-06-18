@@ -1,6 +1,6 @@
 import type { Status } from './appTypes';
 import type { NormalizedAgentStreamEvent } from './handoffHelpers';
-import { sourceKindLabel } from './uiHelpers';
+import { productStatusLabel, productToolLabel, sourceKindLabel } from './uiHelpers';
 
 export type AgentStreamEventEffect = {
   activity?: string;
@@ -48,7 +48,7 @@ export function agentStreamEventEffect(event: NormalizedAgentStreamEvent): Agent
   if (event.type === 'model.tool_call') {
     const names = event.data?.names || `${event.data?.count || '0'} call(s)`;
     return {
-      activity: `model tool call: ${names}`,
+      activity: `Tool request prepared: ${names}`,
       trace: `model tool call: ${names}`
     };
   }
@@ -74,9 +74,11 @@ export function agentStreamEventEffect(event: NormalizedAgentStreamEvent): Agent
   }
   if (event.type === 'execution.decided' && event.data?.status) {
     const toolName = event.data.tool_name || event.data.action || '';
+    const status = String(event.data.status || '');
+    const toolLabel = productToolLabel(toolName);
     return {
-      activity: `executor: ${event.data.status}${event.data.tool_name ? ` ${event.data.tool_name}` : ''}`,
-      trace: `executor: ${event.data.status}${toolName ? ` ${toolName}` : ''}`
+      activity: status === 'not_required' ? 'No local action needed' : `${toolLabel}: ${productStatusLabel(status, 'Selected')}`,
+      trace: `executor: ${status}${toolName ? ` ${toolName}` : ''}`
     };
   }
   if (event.type === 'capability.gap') {
@@ -98,20 +100,20 @@ export function agentStreamEventEffect(event: NormalizedAgentStreamEvent): Agent
   if (event.type === 'permission.requested' && event.data?.tool_name) {
     return {
       permissionData: event.data,
-      activity: `permission: ${event.data.tool_name} (${event.data.risk_level || 'medium'} risk)`,
+      activity: `Approval required: ${productToolLabel(event.data.tool_name)} (${productStatusLabel(event.data.risk_level || 'medium', 'Medium')} risk)`,
       trace: `permission needed: ${event.data.tool_name}`
     };
   }
   if (event.type === 'edit.proposed' && event.data?.path) {
     return {
       editProposalData: event.data,
-      activity: `edit proposal: ${event.data.path}`,
+      activity: `File change prepared: ${event.data.path}`,
       trace: `edit proposed: ${event.data.path}`
     };
   }
   if (event.type === 'tool.completed' && event.data?.tool_name) {
     return {
-      activity: `tool completed: ${event.data.tool_name} (${event.data.status || 'completed'})`,
+      activity: `${productToolLabel(event.data.tool_name)}: ${productStatusLabel(event.data.status || 'completed', 'Completed')}`,
       trace: `tool: ${event.data.tool_name} (${event.data.status || 'completed'})`,
       statusPatch: { shellEnabled: true }
     };
@@ -130,7 +132,7 @@ export function agentStreamEventEffect(event: NormalizedAgentStreamEvent): Agent
   }
   if (event.type === 'verification.completed' && event.data?.status) {
     return {
-      activity: `verification: ${event.data.status}`,
+      activity: `Result check: ${productStatusLabel(event.data.status, String(event.data.status || 'Checked'))}`,
       trace: `verification: ${event.data.status}`
     };
   }

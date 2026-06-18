@@ -1,5 +1,5 @@
 import type { ChatMessage, InternetStatus, SettingsView, Status } from './appTypes';
-import { compactText, isAssistantActiveMeta, sourceKindLabel } from './uiHelpers';
+import { assistantModelDisplayLabel, compactText, isAssistantActiveMeta, sourceKindLabel } from './uiHelpers';
 
 export type ChatContextItem = {
   icon: string;
@@ -17,10 +17,11 @@ export type ChatContextOptions = {
 
 export function assistantMetaItems(message: ChatMessage) {
   const items: Array<{ label: string; icon: string }> = [];
-  if (message.model) items.push({ label: message.model, icon: 'models' });
+  const model = assistantModelDisplayLabel(message.model);
+  if (model) items.push({ label: model, icon: model === 'Approval' || model.includes('action') || model.includes('change') ? 'tools' : 'models' });
   if (message.skill) items.push({ label: message.skill, icon: 'skills' });
   const source = sourceKindLabel(message.sourceKind);
-  if (source) items.push({ label: source, icon: source === 'internet' ? 'search' : 'documents' });
+  if (source) items.push({ label: source, icon: source === 'internet' ? 'search' : source === 'local action' ? 'tools' : 'documents' });
   if (message.sources?.length) items.push({ label: `${message.sources.length} source${message.sources.length === 1 ? '' : 's'}`, icon: 'documents' });
   if (message.meta && !isAssistantActiveMeta(message.meta)) items.push({ label: message.meta, icon: 'system' });
   return items;

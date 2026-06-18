@@ -81,6 +81,23 @@ func TestProposeRouteCorrectionInfersCommonNaturalLanguageCorrections(t *testing
 			wantTools:   []string{"rag_search"},
 			wantTags:    []string{"source:local_documents", "route:rag_search"},
 		},
+		{
+			name:          "explicit next-time local documents instead of web",
+			message:       "next time when I ask this, use local documents instead of web",
+			wantRoute:     routing.RouteRAGSearch,
+			wantPattern:   "local documents",
+			wantTools:     []string{"rag_search"},
+			wantForbidden: []string{"internet_search", "internet_fetch"},
+			wantTags:      []string{"source:local_documents", "intent:avoid_tool", "route:rag_search"},
+		},
+		{
+			name:        "explicit workspace instead of memory preference",
+			message:     "when I ask about this project, use workspace files instead of memory",
+			wantRoute:   routing.RouteWorkspaceRead,
+			wantPattern: "workspace files",
+			wantTools:   []string{"search_files"},
+			wantTags:    []string{"source:workspace", "route:workspace_read"},
+		},
 	}
 
 	for _, tc := range cases {
@@ -118,19 +135,51 @@ func TestProposeRouteCorrectionInfersCommonNaturalLanguageCorrections(t *testing
 	}
 }
 
-func TestProposeRouteCorrectionClarifiesAmbiguousCorrection(t *testing.T) {
-	proposal, ok := ProposeRouteCorrection(RouteCorrectionProposalInput{
-		Message:            "That was wrong. Don't do that.",
-		PreviousUserPrompt: "check it",
-	})
-	if !ok {
-		t.Fatal("ProposeRouteCorrection() ok = false, want true for correction intent")
+func TestProposeRouteCorrectionIgnoresGenericShortCorrectionReplies(t *testing.T) {
+	cases := []string{
+		"That was wrong. Don't do that.",
+		"no",
+		"yes",
+		"not that",
+		"tool failed",
 	}
-	if !proposal.NeedsClarification {
-		t.Fatalf("NeedsClarification = false, want true; proposal=%+v", proposal)
+	for _, message := range cases {
+		t.Run(message, func(t *testing.T) {
+			if proposal, ok := ProposeRouteCorrection(RouteCorrectionProposalInput{
+				Message:            message,
+				PreviousUserPrompt: "check it",
+			}); ok {
+				t.Fatalf("ProposeRouteCorrection() ok = true for generic reply; proposal=%+v", proposal)
+			}
+		})
 	}
-	if strings.TrimSpace(proposal.Correction.IntendedRouteCategory) != "" {
-		t.Fatalf("Correction route = %q, want no saved correction", proposal.Correction.IntendedRouteCategory)
+}
+
+func TestProposeRouteCorrectionDoesNotHijackRewriteEditorialPrompts(t *testing.T) {
+	cases := []string{
+		"you shouldn't phrase it like that, make it better",
+		"you shouldnt phrase it like that, make it better",
+		"you should not say it like that, make it better",
+		"you should make this paragraph better",
+		"make this better: hello dear sir",
+		"make this better",
+		"rewrite this",
+		"improve this",
+		"make it professional",
+		"you should make this clearer",
+		"fix this paragraph",
+		"polish this",
+		"summarize this better",
+	}
+	for _, message := range cases {
+		t.Run(message, func(t *testing.T) {
+			if proposal, ok := ProposeRouteCorrection(RouteCorrectionProposalInput{
+				Message:            message,
+				PreviousUserPrompt: "Make better: hello dear sir",
+			}); ok {
+				t.Fatalf("ProposeRouteCorrection() ok = true for rewrite/editorial prompt; proposal=%+v", proposal)
+			}
+		})
 	}
 }
 

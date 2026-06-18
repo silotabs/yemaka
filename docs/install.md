@@ -16,6 +16,29 @@ background jobs, or turn on internet access.
 Desktop/Wails packaging is deferred for this public-beta release. The same Go
 core is available through local web, CLI, and TUI.
 
+## Choosing An Install Home
+
+The default macOS install home is `~/Library/Application Support/Yemaka`
+because it is the standard user-local place for app support files: config,
+SQLite memory, logs, profiles, bundled local assets, generated artifacts, and
+the install marker. It does not require administrator privileges, keeps Yemaka
+data out of visible folders such as Downloads/Documents/Desktop, and keeps
+uninstall safer because everything lives under one dedicated app directory.
+
+`~/.yemaka` is acceptable for CLI-only or custom Unix-style installs, but it is
+more developer-oriented and still hidden. `~/yemaka` is easier to see, but it
+clutters the home folder and is easier to move or delete by accident. For most
+macOS users, keep the default. For managed or advanced installs, pass an
+explicit home:
+
+```bash
+scripts/install/install.sh --home "$HOME/.yemaka"
+scripts/install/install.sh --home "$HOME/yemaka"
+```
+
+Whichever path you choose, use a dedicated directory whose name includes
+`yemaka`; the installer rejects broad folders for safety.
+
 ## Quick Install
 
 macOS or Linux:
@@ -54,10 +77,28 @@ The installer may ask for:
 - command shim directory
 - optional model role names
 - low-memory guidance
-- confirmation that optional systems remain disabled
+
+The installer shows protected defaults as a summary, not as a choice to
+override. Internet/search, cloud fallback, connectors, embeddings/vector DB,
+background jobs, and model downloads remain off during install. Enable optional
+systems later from Settings or the `yemaka` CLI.
 
 Choosing a model name only records that already-installed model in config.
 Yemaka never pulls models during install.
+
+When installing from source, Yemaka builds the local app binary on your machine.
+The first build can take a minute because Go may compile the SQLite driver and
+other local runtime packages. The installer shows progress and writes details
+to the install log.
+
+The installer also writes a user-local install receipt. The receipt records the
+Yemaka home, command shim directory, installed binary, install type, and latest
+install log so later uninstall runs can prefill the correct paths.
+
+Built-in default skills are copied to `<YEMAKA_HOME>/skills/default`, so
+`yemaka skill list` works after install even when you run Yemaka outside the
+source checkout. Domain-pack templates are copied separately and remain inactive
+until you explicitly install and enable a pack.
 
 ## Install Path Safety
 
@@ -91,6 +132,17 @@ The installer writes a `.yemaka-install-root` marker inside the install home.
 The uninstall script requires that marker before it will remove the data
 directory.
 
+It also writes an install receipt outside the source checkout:
+
+| Platform | Receipt |
+|---|---|
+| macOS | `~/Library/Application Support/Yemaka/Installer/install-receipt.env` |
+| Linux | `${XDG_STATE_HOME:-~/.local/state}/yemaka/install-receipt.env` |
+| Windows | `%LOCALAPPDATA%\Yemaka\install-receipt.env` |
+
+Set `YEMAKA_INSTALL_RECEIPT=/path/to/install-receipt.env` when testing or when
+you need the receipt in a managed location.
+
 ## Platform Notes
 
 macOS and Linux use:
@@ -110,6 +162,11 @@ If `~/.local/bin` is not in your shell `PATH`, add:
 ```bash
 export PATH="$HOME/.local/bin:$PATH"
 ```
+
+The macOS/Linux installer defaults the `yemaka` command shim to
+`~/.local/bin/yemaka`. You can choose another command directory with
+`--bin-dir`, but the user-local default avoids Homebrew or system-wide
+locations.
 
 Windows creates a command shim at:
 
@@ -191,8 +248,9 @@ local-first defaults.
 
 `qa.sh` is a non-destructive installer contract check. It verifies help output,
 unsafe install-home rejection, unsafe command-shim rejection, uninstall marker
-safety, Windows installer safety markers, and the no-model-download /
-disabled-by-default guarantees.
+safety, install receipt discovery, installed default-skill and template
+discovery outside the source checkout, Windows installer safety markers, and
+the no-model-download / disabled-by-default guarantees.
 
 ## Web Asset Location
 
@@ -215,6 +273,10 @@ macOS or Linux:
 ```bash
 scripts/install/uninstall.sh
 ```
+
+If an install receipt is present, the uninstaller uses it to prefill the Yemaka
+home and command shim directory. It still asks for confirmation before removing
+the command shim, binary, or local data.
 
 To remove local memory, profiles, generated artifacts, logs, web assets, and
 config, pass `--remove-data`. Data removal is refused unless the target is a

@@ -1,4 +1,4 @@
-import { humanizeIdentifier } from './uiHelpers';
+import { humanizeIdentifier, productStatusLabel, productToolLabel } from './uiHelpers';
 
 export type ToolRunLike = {
   id?: string;
@@ -143,7 +143,7 @@ export function formatFileSize(bytes: number) {
 }
 
 export function formatToolStatus(status: string) {
-  return humanizeIdentifier(String(status || 'available'), 'available');
+  return productStatusLabel(status, 'Available');
 }
 
 export function formatSurfaces(surfaces: string[] | undefined) {
@@ -151,5 +151,5 @@ export function formatSurfaces(surfaces: string[] | undefined) {
 }
 
 export function formatToolName(name: string | undefined) {
-  return humanizeIdentifier(name, 'Tool');
+  return productToolLabel(name, 'Local action');
 }

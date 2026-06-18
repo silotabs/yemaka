@@ -1,11 +1,15 @@
 package release
 
 import (
+	"archive/tar"
+	"archive/zip"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"encoding/json"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -580,7 +584,136 @@ func checkDistributionArtifacts(dir string) Check {
 	if _, err := os.Stat(manifest); err != nil {
 		return warn("distribution_artifacts", "manifest.json is missing")
 	}
+	if matches, err := findForbiddenReleaseArchiveEntries(dir); err != nil {
+		return warn("distribution_artifacts", "could not inspect release artifact hygiene: "+err.Error())
+	} else if len(matches) > 0 {
+		return fail("distribution_artifacts", "release artifacts include forbidden development files: "+strings.Join(matches, ", "))
+	}
 	return pass("distribution_artifacts", "DMG, checksum, and manifest are present")
+}
+
+func findForbiddenReleaseArchiveEntries(dir string) ([]string, error) {
+	var matches []string
+	err := filepath.WalkDir(dir, func(path string, entry os.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		rel, relErr := filepath.Rel(dir, path)
+		if relErr != nil {
+			return relErr
+		}
+		if rel == "." {
+			return nil
+		}
+		rel = filepath.ToSlash(rel)
+		if forbiddenReleaseArchivePath(rel) {
+			matches = append(matches, rel)
+			if entry.IsDir() {
+				return filepath.SkipDir
+			}
+			return nil
+		}
+		if entry.IsDir() {
+			return nil
+		}
+		switch {
+		case strings.HasSuffix(strings.ToLower(rel), ".zip"):
+			archiveMatches, err := inspectZipArchive(path, rel)
+			if err != nil {
+				return err
+			}
+			matches = append(matches, archiveMatches...)
+		case strings.HasSuffix(strings.ToLower(rel), ".tar.gz") || strings.HasSuffix(strings.ToLower(rel), ".tgz") || strings.HasSuffix(strings.ToLower(rel), ".tar"):
+			archiveMatches, err := inspectTarArchive(path, rel)
+			if err != nil {
+				return err
+			}
+			matches = append(matches, archiveMatches...)
+		}
+		return nil
+	})
+	return matches, err
+}
+
+func inspectZipArchive(path string, label string) ([]string, error) {
+	reader, err := zip.OpenReader(path)
+	if err != nil {
+		return nil, err
+	}
+	defer reader.Close()
+	var matches []string
+	for _, file := range reader.File {
+		name := strings.TrimSpace(file.Name)
+		if forbiddenReleaseArchivePath(name) {
+			matches = append(matches, label+":"+filepath.ToSlash(name))
+		}
+	}
+	return matches, nil
+}
+
+func inspectTarArchive(path string, label string) ([]string, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+	var reader io.Reader = file
+	if strings.HasSuffix(strings.ToLower(path), ".tar.gz") || strings.HasSuffix(strings.ToLower(path), ".tgz") {
+		gz, err := gzip.NewReader(file)
+		if err != nil {
+			return nil, err
+		}
+		defer gz.Close()
+		reader = gz
+	}
+	tarReader := tar.NewReader(reader)
+	var matches []string
+	for {
+		header, err := tarReader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if forbiddenReleaseArchivePath(header.Name) {
+			matches = append(matches, label+":"+filepath.ToSlash(header.Name))
+		}
+	}
+	return matches, nil
+}
+
+func forbiddenReleaseArchivePath(path string) bool {
+	path = strings.TrimSpace(filepath.ToSlash(path))
+	if path == "" {
+		return false
+	}
+	trimmed := strings.Trim(path, "/")
+	parts := strings.Split(trimmed, "/")
+	for _, part := range parts {
+		switch part {
+		case ".DS_Store", "__MACOSX", "node_modules", "playwright-report", "test-results", "logs", "tmp", "temp", "coverage":
+			return true
+		}
+	}
+	lower := strings.ToLower(trimmed)
+	for _, prefix := range []string{
+		"frontend/playwright-report/",
+		"frontend/test-results/",
+		"frontend/node_modules/",
+		"frontend/dist/",
+		"build/",
+	} {
+		if strings.HasPrefix(lower, prefix) {
+			return true
+		}
+	}
+	for _, suffix := range []string{".sqlite", ".sqlite3", ".db", ".db-shm", ".db-wal", ".log", ".tmp"} {
+		if strings.HasSuffix(lower, suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 func checkNotarizationStatus(dir string) Check {

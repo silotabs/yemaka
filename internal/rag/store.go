@@ -190,7 +190,7 @@ func (s *Store) listDocuments(ctx context.Context, limit int) ([]DocumentInvento
 	}
 	defer rows.Close()
 
-	var items []DocumentInventoryItem
+	items := make([]DocumentInventoryItem, 0)
 	for rows.Next() {
 		var item DocumentInventoryItem
 		if err := rows.Scan(

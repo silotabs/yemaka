@@ -46,6 +46,12 @@ function Normalize-PathString([string]$PathValue) {
   return $full
 }
 
+function Install-ReceiptPath {
+  if ($env:YEMAKA_INSTALL_RECEIPT) { return (Normalize-PathString $env:YEMAKA_INSTALL_RECEIPT) }
+  if ($env:LOCALAPPDATA) { return (Join-Path (Join-Path $env:LOCALAPPDATA "Yemaka") "install-receipt.env") }
+  return (Join-Path $HOME "AppData\Local\Yemaka\install-receipt.env")
+}
+
 function Path-IsEqualOrInside([string]$Parent, [string]$Child) {
   $parentPath = Normalize-PathString $Parent
   $childPath = Normalize-PathString $Child
@@ -117,16 +123,16 @@ function Add-UserPath([string]$PathToAdd) {
 }
 
 if ([string]::IsNullOrWhiteSpace($Type)) {
-  $Type = Ask "Choose installation type: web (Web + CLI/TUI) or cli (CLI/TUI only)" "web"
+  $Type = Ask "Choose experience: web app + CLI/TUI, or CLI/TUI only" "web"
 }
 if ($Type -ne "web" -and $Type -ne "cli") {
   throw "Installation type must be web or cli."
 }
 if ([string]::IsNullOrWhiteSpace($Home)) {
-  $Home = Ask "Choose Yemaka data directory" (Default-Home)
+  $Home = Ask "Choose Yemaka data folder" (Default-Home)
 }
 if ([string]::IsNullOrWhiteSpace($BinDir)) {
-  $BinDir = Ask "Choose command directory" (Default-BinDir)
+  $BinDir = Ask "Create the yemaka command in this folder" (Default-BinDir)
 }
 
 $RepoRoot = Normalize-PathString (Resolve-Path (Join-Path $PSScriptRoot "..\.."))
@@ -138,14 +144,25 @@ $InstallBinDir = Join-Path $InstallHome "libexec"
 $InstallBin = Join-Path $InstallBinDir "yemaka.exe"
 $LogDir = Join-Path $InstallHome "logs"
 New-Item -ItemType Directory -Force -Path $InstallHome, $InstallBinDir, $LogDir | Out-Null
+$CreatedAt = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
 @"
 Yemaka install home
-created_at=$((Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ"))
+created_at=$CreatedAt
 repo=$RepoRoot
+install_type=$Type
+bin_dir=$BinDir
 "@ | Set-Content -Encoding ASCII (Join-Path $InstallHome ".yemaka-install-root")
 $LogFile = Join-Path $LogDir ("install-{0:yyyyMMddTHHmmssZ}.log" -f (Get-Date).ToUniversalTime())
+$BrandIconSrc = Join-Path $RepoRoot "frontend\public\favicon.svg"
+$BrandIconDst = ""
 
-Write-Host "Yemaka public-beta installer"
+Write-Host "Yemaka Public Beta Installer" -ForegroundColor Green
+Write-Host "Local-first setup for the web app, CLI, TUI, and localhost server."
+Write-Host "Welcome. Yemaka will be installed locally on this computer."
+Write-Host "Protected defaults stay off during install: internet/search, cloud, connectors, embeddings, background jobs, and model downloads."
+Write-Host "Press Enter to accept the recommended choices."
+if (Test-Path $BrandIconSrc) { Write-Host "Brand icon: $BrandIconSrc" -ForegroundColor DarkGray }
+Write-Host ""
 Write-Host "Repository: $RepoRoot"
 Write-Host "Install type: $Type"
 Write-Host "Yemaka home: $InstallHome"
@@ -181,30 +198,42 @@ if (Command-Exists "ollama") {
 }
 
 Write-Host ""
-Write-Host "Model guidance:"
+Write-Host "Model Setup"
+Write-Host "Yemaka uses Ollama models you install separately. This installer will not download models."
+Write-Host "Recommended starting points:"
 Write-Host "  4GB RAM: CLI/TUI low-memory only; use a small 2B quantized model."
-Write-Host "  8GB RAM: recommended minimum for web + a small local model."
+Write-Host "  8GB RAM: web app + a small local model."
 Write-Host "  16GB+ RAM: stronger 4B local models become more comfortable."
 Write-Host "  Cross-platform low-memory option: qwen3.5:2b-q4_K_M if available."
 
-$configureModel = Confirm "Do you want to configure Ollama/model settings now?" "no"
+$configureModel = Confirm "Use an already-installed Ollama model now?" "no"
 $modelName = ""
 if ($configureModel) {
-  $modelName = Ask "Installed model name to use for default and low-memory roles" ""
+  $modelName = Ask "Ollama model name" ""
 }
-$lowMemory = Ask "Do you want to use low-memory mode guidance?" "yes"
-$disabledDefaults = Ask "Keep internet/search/cloud/connectors/embeddings disabled by default?" "yes"
-if (-not @("yes","y","true","1").Contains($disabledDefaults.ToLowerInvariant())) {
-  Write-Warning "Installer will still preserve safe disabled defaults. Enable optional systems later from settings/CLI."
-}
+if (Confirm "Keep low-memory friendly guidance?" "yes") { $lowMemory = "yes" } else { $lowMemory = "no" }
+
+Write-Host ""
+Write-Host "Protected Defaults" -ForegroundColor Green
+Write-Host "OK Internet/search remains off."
+Write-Host "OK Cloud fallback remains off."
+Write-Host "OK Connectors remain off."
+Write-Host "OK Embeddings/vector database remains off."
+Write-Host "OK No background jobs or model downloads are started."
+Write-Host "You can enable optional systems later from Settings or the yemaka CLI." -ForegroundColor DarkGray
 
 Set-Location $RepoRoot
+Write-Host ""
+Write-Host "Install Files" -ForegroundColor Green
 if (Test-Path (Join-Path $RepoRoot "cmd\yemaka\main.go")) {
   if (-not (Command-Exists "go")) { throw "Go is required to build Yemaka from source." }
-  Write-Host "Building Yemaka CLI/TUI/server binary..."
+  Write-Host "Building the local Yemaka app binary."
+  Write-Host "This can take a minute on the first run while Go compiles local SQLite/database support. Build details are saved to: $LogFile" -ForegroundColor DarkGray
   & go build -o $InstallBin .\cmd\yemaka *> $LogFile
+  Write-Host "Built app binary: $InstallBin" -ForegroundColor Green
 } elseif (Command-Exists "yemaka") {
   Copy-Item (Get-Command yemaka).Source $InstallBin -Force
+  Write-Host "Copied app binary: $InstallBin" -ForegroundColor Green
 } else {
   throw "Cannot find source entrypoint or an existing yemaka binary."
 }
@@ -214,8 +243,10 @@ if ($Type -eq "web") {
   if (-not (Test-Path $distIndex)) {
     if ($SkipFrontendBuild) { throw "frontend\dist is missing and frontend build was skipped." }
     if (-not (Command-Exists "npm")) { throw "npm is required because frontend\dist is missing." }
-    Write-Host "Building web frontend..."
+    Write-Host "Building web app assets."
+    Write-Host "This can take a minute. Frontend build details are saved to: $LogFile" -ForegroundColor DarkGray
     & npm --prefix frontend run build *> $LogFile
+    Write-Host "Built web app assets." -ForegroundColor Green
   }
   $webDir = Join-Path $InstallHome "web"
   $webDist = Join-Path $webDir "dist"
@@ -225,9 +256,41 @@ if ($Type -eq "web") {
   Write-Host "Installed web assets: $webDist"
 }
 
+$templateSrc = Join-Path $RepoRoot "packs\templates"
+$templateDstRoot = Join-Path $InstallHome "packs"
+$templateDst = Join-Path $templateDstRoot "templates"
+if (-not (Test-Path $templateSrc)) {
+  throw "Built-in domain pack templates are missing: $templateSrc"
+}
+if (Test-Path $templateDst) { Remove-Item -Recurse -Force $templateDst }
+New-Item -ItemType Directory -Force -Path $templateDstRoot | Out-Null
+Copy-Item -Recurse $templateSrc $templateDst
+Write-Host "Installed domain pack templates: $templateDst"
+
+$brandIconSrc = Join-Path $RepoRoot "frontend\public\favicon.svg"
+if (Test-Path $brandIconSrc) {
+  $brandDir = Join-Path $InstallHome "brand"
+  $BrandIconDst = Join-Path $brandDir "favicon.svg"
+  New-Item -ItemType Directory -Force -Path $brandDir | Out-Null
+  Copy-Item $brandIconSrc $BrandIconDst -Force
+  Write-Host "Installed brand icon: $BrandIconDst" -ForegroundColor Green
+}
+
+$defaultSkillsSrc = Join-Path $RepoRoot "skills\default"
+$defaultSkillsDstRoot = Join-Path $InstallHome "skills"
+$defaultSkillsDst = Join-Path $defaultSkillsDstRoot "default"
+if (-not (Test-Path $defaultSkillsSrc)) {
+  throw "Built-in default skills are missing: $defaultSkillsSrc"
+}
+if (Test-Path $defaultSkillsDst) { Remove-Item -Recurse -Force $defaultSkillsDst }
+New-Item -ItemType Directory -Force -Path $defaultSkillsDstRoot | Out-Null
+Copy-Item -Recurse $defaultSkillsSrc $defaultSkillsDst
+Write-Host "Installed default skills: $defaultSkillsDst"
+
 New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
-$shim = Join-Path $BinDir "yemaka.cmd"
+$shim = ""
 if (-not $NoShim) {
+  $shim = Join-Path $BinDir "yemaka.cmd"
   @"
 @echo off
 set "YEMAKA_HOME=$InstallHome"
@@ -242,6 +305,24 @@ set "YEMAKA_HOME=$InstallHome"
     }
   }
 }
+
+$receiptPath = Install-ReceiptPath
+$receiptDir = Split-Path -Parent $receiptPath
+New-Item -ItemType Directory -Force -Path $receiptDir | Out-Null
+@"
+created_at=$CreatedAt
+app=Yemaka
+install_type=$Type
+install_home=$InstallHome
+bin_dir=$BinDir
+install_bin=$InstallBin
+shim=$shim
+log_file=$LogFile
+repo=$RepoRoot
+brand_icon=$BrandIconDst
+port=$Port
+"@ | Set-Content -Encoding ASCII $receiptPath
+Write-Host "Installation receipt: $receiptPath" -ForegroundColor Green
 
 Write-Host "Creating/verifying default config..."
 $env:YEMAKA_HOME = $InstallHome
@@ -260,7 +341,8 @@ if (-not [string]::IsNullOrWhiteSpace($modelName)) {
 }
 
 Write-Host ""
-Write-Host "Installed. Try:"
+Write-Host "Installation complete." -ForegroundColor Green
+Write-Host "Try:"
 if ($NoShim) {
   Write-Host "  `$env:YEMAKA_HOME='$InstallHome'; & '$InstallBin' --help"
   if ($Type -eq "web") { Write-Host "  `$env:YEMAKA_HOME='$InstallHome'; & '$InstallBin' serve" }
@@ -271,4 +353,5 @@ if ($NoShim) {
   if ($Type -eq "web") { Write-Host "  $shim serve" }
   Write-Host "  $shim tui"
 }
+Write-Host "The install receipt records this folder for uninstall tooling."
 Write-Host "No cloud, internet/search, connectors, embeddings, background jobs, or model downloads were enabled by this installer."

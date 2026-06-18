@@ -91,6 +91,12 @@ func ReplayTraceFromPlan(input PlanInput, plan Plan) replay.Trace {
 		{Key: "continuation_mode", Value: plan.ContinuationMode},
 		{Key: "ambiguity_flags", Value: strings.Join(plan.AmbiguityFlags, ",")},
 		{Key: "knowledge_sources", Value: strings.Join(knowledgeSources, ",")},
+		{Key: "message_rewrite", Value: strconv.FormatBool(plan.MessageFrame.IsRewriteLike)},
+		{Key: "message_route_teaching", Value: strconv.FormatBool(plan.MessageFrame.IsRouteTeachingLike)},
+		{Key: "message_apply_like", Value: strconv.FormatBool(plan.MessageFrame.IsApplyLike)},
+		{Key: "message_last_response_artifact", Value: strconv.FormatBool(plan.MessageFrame.IsLastResponseArtifactAction)},
+		{Key: "message_requested_action", Value: plan.MessageFrame.RequestedAction},
+		{Key: "message_target_kind", Value: plan.MessageFrame.TargetKind},
 	}
 	if len(knowledgeRefs) > 0 {
 		trace.MemoryUsed = append(trace.MemoryUsed, knowledgeRefs...)
@@ -101,6 +107,10 @@ func ReplayTraceFromPlan(input PlanInput, plan Plan) replay.Trace {
 			replay.Attribute{Key: "session_task_status", Value: plan.RouteSession.TaskStatus},
 			replay.Attribute{Key: "session_pending_clarification", Value: plan.RouteSession.PendingClarification},
 			replay.Attribute{Key: "session_pending_approval", Value: plan.RouteSession.PendingApproval},
+			replay.Attribute{Key: "session_pending_operation_id", Value: plan.RouteSession.PendingOperationID},
+			replay.Attribute{Key: "session_pending_operation_type", Value: plan.RouteSession.PendingOperationType},
+			replay.Attribute{Key: "session_pending_operation_target", Value: plan.RouteSession.PendingOperationTarget},
+			replay.Attribute{Key: "session_route_lock_strength", Value: plan.RouteSession.RouteLockStrength},
 			replay.Attribute{Key: "session_last_outcome", Value: plan.RouteSession.LastOutcome},
 			replay.Attribute{Key: "session_failure_reason", Value: plan.RouteSession.FailureReason},
 		)
@@ -112,8 +122,12 @@ func ReplayTraceFromPlan(input PlanInput, plan Plan) replay.Trace {
 		}
 		trace.Attributes = append(trace.Attributes,
 			replay.Attribute{Key: "route_candidate_" + strconv.Itoa(index+1), Value: candidate.Route},
+			replay.Attribute{Key: "route_candidate_" + strconv.Itoa(index+1) + "_source", Value: candidate.Source},
 			replay.Attribute{Key: "route_candidate_" + strconv.Itoa(index+1) + "_confidence", Value: strconv.Itoa(candidate.Confidence)},
 			replay.Attribute{Key: "route_candidate_" + strconv.Itoa(index+1) + "_lane", Value: candidate.ToolLane},
+			replay.Attribute{Key: "route_candidate_" + strconv.Itoa(index+1) + "_required_state", Value: strings.Join(candidate.RequiredState, ",")},
+			replay.Attribute{Key: "route_candidate_" + strconv.Itoa(index+1) + "_ambiguity_flags", Value: strings.Join(candidate.AmbiguityFlags, ",")},
+			replay.Attribute{Key: "route_candidate_" + strconv.Itoa(index+1) + "_suppressed_reason", Value: candidate.SuppressedReason},
 		)
 	}
 	if plan.RoutePreflight != nil {

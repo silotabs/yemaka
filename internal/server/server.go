@@ -2575,30 +2575,11 @@ func (s *Server) installBuiltInDomainPackTemplate(root string, name string, pack
 }
 
 func builtInDomainPackTemplateCatalog() (workflows.TemplateCatalog, error) {
-	root, err := builtInDomainPackTemplateRepoRoot()
+	root, err := workflows.BuiltInTemplateRoot()
 	if err != nil {
 		return workflows.TemplateCatalog{}, err
 	}
 	return workflows.NewBuiltInTemplateCatalog(root)
-}
-
-func builtInDomainPackTemplateRepoRoot() (string, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("resolve working directory: %w", err)
-	}
-	dir := filepath.Clean(cwd)
-	for {
-		templates := filepath.Join(dir, "packs", "templates")
-		if info, err := os.Stat(templates); err == nil && info.IsDir() {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("built-in domain pack templates not found from %s", cwd)
-		}
-		dir = parent
-	}
 }
 
 func firstNonEmptyString(values ...string) string {
@@ -4895,6 +4876,9 @@ func (s *Server) recordPermissionDecision(ctx context.Context, input PermissionD
 		if err != nil {
 			return PermissionDecisionResult{}, err
 		}
+		if err := agent.ClearPendingOperationState(ctx, s.deps.Memory, requestRun.ConversationID, input.Request.RequestID); err != nil {
+			return PermissionDecisionResult{}, err
+		}
 		return result, nil
 	}
 	if editResult, handled, err := s.applyApprovedEditPermission(ctx, input.Request); err != nil {
@@ -4902,6 +4886,9 @@ func (s *Server) recordPermissionDecision(ctx context.Context, input PermissionD
 	} else if handled {
 		editResult, err = s.savePermissionDecisionMessage(ctx, input.Request, editResult, requestRun)
 		if err != nil {
+			return PermissionDecisionResult{}, err
+		}
+		if err := agent.ClearPendingOperationState(ctx, s.deps.Memory, requestRun.ConversationID, input.Request.RequestID); err != nil {
 			return PermissionDecisionResult{}, err
 		}
 		return editResult, nil
@@ -4927,6 +4914,9 @@ func (s *Server) recordPermissionDecision(ctx context.Context, input PermissionD
 	})
 	result, err = s.savePermissionDecisionMessage(ctx, input.Request, result, requestRun)
 	if err != nil {
+		return PermissionDecisionResult{}, err
+	}
+	if err := agent.ClearPendingOperationState(ctx, s.deps.Memory, requestRun.ConversationID, input.Request.RequestID); err != nil {
 		return PermissionDecisionResult{}, err
 	}
 	return result, nil
@@ -5878,11 +5868,15 @@ func loadSkillRegistryForProfile(profile *profiles.Profile) (skills.Registry, er
 	if profile == nil {
 		return skills.Registry{}, fmt.Errorf("profile is required")
 	}
+	defaultSkillsDir, err := skills.DefaultDir()
+	if err != nil {
+		return skills.Registry{}, err
+	}
 	enabledPackSkillDirs, err := domainpacks.EnabledSkillDirs(filepath.Join(profile.Root, "domain_packs"))
 	if err != nil {
 		return skills.Registry{}, err
 	}
-	return skills.LoadProfileRegistry("skills/default", profile.Skills, enabledPackSkillDirs)
+	return skills.LoadProfileRegistry(defaultSkillsDir, profile.Skills, enabledPackSkillDirs)
 }
 
 func (s *Server) extensionStore() *extensions.Store {

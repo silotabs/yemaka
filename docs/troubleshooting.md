@@ -19,7 +19,8 @@ safety, disabled defaults, and the no-model-download installer contract.
 ## `yemaka` Command Not Found
 
 The installer creates a command shim. If your shell cannot find it, add the
-shim directory to `PATH`.
+shim directory to `PATH`. On macOS and Linux, the default shim location is
+`~/.local/bin/yemaka`.
 
 macOS or Linux:
 
@@ -139,6 +140,10 @@ macOS or Linux:
 ```bash
 scripts/install/uninstall.sh
 ```
+
+If an install receipt exists, the uninstaller prefills the recorded Yemaka home
+and command shim directory. You can override the receipt location with
+`YEMAKA_INSTALL_RECEIPT=/path/to/install-receipt.env`.
 
 Keep the data directory unless you want to delete local memory, documents,
 profiles, logs, generated artifacts, and config.

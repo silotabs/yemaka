@@ -737,6 +737,56 @@ func TestBuildPlanRoutesFileStateFollowupsThroughLocalTools(t *testing.T) {
 	}
 }
 
+func TestBuildPlanFileStateFollowupPrefersAppliedPriorTargetOverStaleProposal(t *testing.T) {
+	appliedPath := "/private/tmp/yemaka-live-qa-workspace/testing.md"
+	input := PlanInput{
+		Content: "did you create the file?",
+		TaskMemory: strings.Join([]string{
+			"RECENT SESSION MESSAGES (conversation continuity only; not current source evidence):",
+			"user: save your last response as test.md",
+			"assistant: I prepared an edit proposal for test.md.",
+			"user: Create " + appliedPath + " and write exactly: who is yemaka",
+			"assistant: I applied the approved edit to `" + appliedPath + "`. Verification: pass.",
+		}, "\n"),
+		Continuation: routing.BuildContinuationFrame(routing.ContinuationInput{
+			Content: "did you create the file?",
+			Prior: routing.ContinuationPriorState{
+				RouteCategory: routing.RouteFileWrite,
+				ToolName:      "approved_edit_file",
+				Target:        appliedPath,
+				SourceOfTruth: routing.PreflightSourceWorkspace,
+			},
+		}),
+		SessionContract: routing.SessionContract{
+			ActiveTarget:   "test.md",
+			ContextSources: []string{appliedPath},
+			LastOutcome:    routing.LastOutcomeCompleted,
+		},
+	}
+
+	plan := BuildPlan(input)
+	if plan.NeedsClarification {
+		t.Fatalf("NeedsClarification = true, want false; plan=%+v", plan)
+	}
+	if !containsTool(plan.ToolsNeeded, "file_stat") {
+		t.Fatalf("ToolsNeeded = %#v, want file_stat", plan.ToolsNeeded)
+	}
+	if len(plan.FilesNeeded) == 0 || plan.FilesNeeded[0] != appliedPath {
+		t.Fatalf("FilesNeeded = %#v, want applied path before stale proposal", plan.FilesNeeded)
+	}
+
+	decision := DecideExecution(plan, input)
+	if decision.Status != ExecutionReady {
+		t.Fatalf("decision.Status = %q, want %q; decision=%+v", decision.Status, ExecutionReady, decision)
+	}
+	if decision.ToolName != "file_stat" {
+		t.Fatalf("decision.ToolName = %q, want file_stat; decision=%+v", decision.ToolName, decision)
+	}
+	if len(decision.Command) != 2 || decision.Command[1] != appliedPath {
+		t.Fatalf("decision.Command = %#v, want applied path target", decision.Command)
+	}
+}
+
 func TestBuildPlanRoutesExplicitFileStateQuestionThroughReadFile(t *testing.T) {
 	input := PlanInput{Content: "What is the file path of test-files/permission_smoke.md or where is it saved?"}
 	plan := BuildPlan(input)

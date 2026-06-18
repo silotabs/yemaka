@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
 	"io"
 	"strings"
 
@@ -15,6 +14,7 @@ import (
 	"github.com/charmbracelet/lipgloss"
 
 	"yemaka/internal/agent"
+	"yemaka/internal/brand"
 	"yemaka/internal/diagnostics"
 	"yemaka/internal/skills"
 )
@@ -231,12 +231,19 @@ func (m bubbleModel) View() string {
 
 func (m *bubbleModel) resize() {
 	sidebarW := sidebarWidth(m.width)
-	bodyH := max(8, m.height-6)
+	bodyH := max(8, m.height-m.headerHeight()-2)
 	mainW := max(30, m.width-sidebarW-4)
 	m.viewport.Width = mainW - 2
 	m.viewport.Height = bodyH - 4
 	m.input.Width = max(20, m.width-8)
 	m.syncViewport()
+}
+
+func (m bubbleModel) headerHeight() int {
+	if m.width > 0 && m.width < 78 {
+		return 7
+	}
+	return 5
 }
 
 func (m bubbleModel) headerView() string {
@@ -253,11 +260,52 @@ func (m bubbleModel) headerView() string {
 	if m.runner.deps.Config != nil && m.runner.deps.Config.Internet.Enabled {
 		internet = "net " + m.runner.deps.Config.Internet.DefaultMode
 	}
-	title := fmt.Sprintf("Yemaka TUI  %s  %s  %s  %s", modelReady, model, policy, internet)
+	runState := "idle"
 	if m.busy {
-		title += "  running"
+		runState = "running"
 	}
-	return headerStyle.Width(max(20, m.width-2)).Render(title)
+	width := max(20, m.width-2)
+	status := strings.Join([]string{modelReady, "model " + model, policy, internet, runState}, "  |  ")
+	if width < 78 {
+		status = fitText(status, width-2)
+		content := strings.Join([]string{
+			brandMarkStyle.Render(brand.Wordmark),
+			brandTitleStyle.Render("Yemaka TUI") + "  " + brandSubtitleStyle.Render("Local-first agent console"),
+			brandStatusStyle.Render(status),
+		}, "\n")
+		return headerStyle.Width(width).Render(content)
+	}
+	infoWidth := max(24, width-lipgloss.Width(brand.Wordmark)-4)
+	status = fitText(status, infoWidth)
+	info := strings.Join([]string{
+		brandTitleStyle.Render("Yemaka TUI"),
+		brandSubtitleStyle.Render("Local-first agent console"),
+		brandStatusStyle.Render(status),
+	}, "\n")
+	content := lipgloss.JoinHorizontal(lipgloss.Top, brandMarkStyle.Render(brand.Wordmark), "   ", info)
+	return headerStyle.Width(width).Render(content)
+}
+
+func fitText(input string, width int) string {
+	input = strings.Join(strings.Fields(input), " ")
+	if width <= 0 {
+		return ""
+	}
+	if lipgloss.Width(input) <= width {
+		return input
+	}
+	runes := []rune(input)
+	if width <= 3 {
+		if len(runes) < width {
+			return input
+		}
+		return string(runes[:width])
+	}
+	limit := width - 3
+	if len(runes) < limit {
+		return input
+	}
+	return string(runes[:limit]) + "..."
 }
 
 func (m bubbleModel) sidebarView() string {
@@ -600,9 +648,22 @@ func max(a int, b int) int {
 var (
 	headerStyle = lipgloss.NewStyle().
 			Foreground(lipgloss.Color("230")).
-			Background(lipgloss.Color("29")).
-			Bold(true).
+			Background(lipgloss.Color("22")).
 			Padding(0, 1)
+
+	brandMarkStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("48")).
+			Bold(true)
+
+	brandTitleStyle = lipgloss.NewStyle().
+			Foreground(lipgloss.Color("230")).
+			Bold(true)
+
+	brandSubtitleStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("151"))
+
+	brandStatusStyle = lipgloss.NewStyle().
+				Foreground(lipgloss.Color("252"))
 
 	sidebarStyle = lipgloss.NewStyle().
 			Border(lipgloss.NormalBorder(), false, true, false, false).

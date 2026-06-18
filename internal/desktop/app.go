@@ -1596,7 +1596,7 @@ func (a *App) installBuiltInDomainPackTemplate(name string, packDir string) (dom
 }
 
 func desktopBuiltInDomainPackTemplateCatalog() (workflows.TemplateCatalog, error) {
-	root, err := desktopBuiltInDomainPackTemplateRepoRoot()
+	root, err := workflows.BuiltInTemplateRoot()
 	if err != nil {
 		return workflows.TemplateCatalog{}, err
 	}
@@ -1612,25 +1612,6 @@ func desktopDomainPackStatusByName(statuses []domainpacks.PackStatus, name strin
 		}
 	}
 	return nil
-}
-
-func desktopBuiltInDomainPackTemplateRepoRoot() (string, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("resolve working directory: %w", err)
-	}
-	dir := filepath.Clean(cwd)
-	for {
-		templates := filepath.Join(dir, "packs", "templates")
-		if info, err := os.Stat(templates); err == nil && info.IsDir() {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("built-in domain pack templates not found from %s", cwd)
-		}
-		dir = parent
-	}
 }
 
 func firstNonEmptyDesktopString(values ...string) string {
@@ -3517,12 +3498,26 @@ func (a *App) RecordPermissionDecision(input PermissionDecisionInput) (Permissio
 	result := PermissionDecisionResult{Status: decision}
 	if decision != "approved" {
 		result.Message = fmt.Sprintf("Permission rejected. I will not run `%s`.", input.Request.ToolName)
-		return a.savePermissionDecisionMessage(input.Request, result, requestRun)
+		result, err = a.savePermissionDecisionMessage(input.Request, result, requestRun)
+		if err != nil {
+			return PermissionDecisionResult{}, err
+		}
+		if err := agent.ClearPendingOperationState(a.ctxOrBackground(), a.store, requestRun.ConversationID, input.Request.RequestID); err != nil {
+			return PermissionDecisionResult{}, err
+		}
+		return result, nil
 	}
 	if editResult, handled, err := a.applyApprovedEditPermission(input.Request); err != nil {
 		return PermissionDecisionResult{}, err
 	} else if handled {
-		return a.savePermissionDecisionMessage(input.Request, editResult, requestRun)
+		editResult, err = a.savePermissionDecisionMessage(input.Request, editResult, requestRun)
+		if err != nil {
+			return PermissionDecisionResult{}, err
+		}
+		if err := agent.ClearPendingOperationState(a.ctxOrBackground(), a.store, requestRun.ConversationID, input.Request.RequestID); err != nil {
+			return PermissionDecisionResult{}, err
+		}
+		return editResult, nil
 	}
 	outcome := agent.ResolveApprovedPermission(a.ctxOrBackground(), input.Request, desktopToolExecutor(a))
 	result.ToolName = outcome.Decision.ToolName
@@ -3543,7 +3538,14 @@ func (a *App) RecordPermissionDecision(input PermissionDecisionInput) (Permissio
 		Status:             agent.PermissionOutcomeStatus(outcome),
 		RiskLevel:          input.Request.RiskLevel,
 	})
-	return a.savePermissionDecisionMessage(input.Request, result, requestRun)
+	result, err = a.savePermissionDecisionMessage(input.Request, result, requestRun)
+	if err != nil {
+		return PermissionDecisionResult{}, err
+	}
+	if err := agent.ClearPendingOperationState(a.ctxOrBackground(), a.store, requestRun.ConversationID, input.Request.RequestID); err != nil {
+		return PermissionDecisionResult{}, err
+	}
+	return result, nil
 }
 
 func (a *App) permissionRequestRun(requestID string) (memory.ToolRun, bool, error) {
@@ -4085,11 +4087,15 @@ func loadSkillRegistryForProfile(profile *profiles.Profile) (skills.Registry, er
 	if profile == nil {
 		return skills.Registry{}, fmt.Errorf("profile is required")
 	}
+	defaultSkillsDir, err := skills.DefaultDir()
+	if err != nil {
+		return skills.Registry{}, err
+	}
 	enabledPackSkillDirs, err := domainpacks.EnabledSkillDirs(filepath.Join(profile.Root, "domain_packs"))
 	if err != nil {
 		return skills.Registry{}, err
 	}
-	return skills.LoadProfileRegistry("skills/default", profile.Skills, enabledPackSkillDirs)
+	return skills.LoadProfileRegistry(defaultSkillsDir, profile.Skills, enabledPackSkillDirs)
 }
 
 func (a *App) extensionStore() *extensions.Store {

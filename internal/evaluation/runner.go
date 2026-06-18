@@ -1373,21 +1373,11 @@ func defaultSkillDirs(profile *profiles.Profile) []string {
 }
 
 func locateDefaultSkillsDir() string {
-	wd, err := os.Getwd()
+	defaults, err := skills.DefaultDir()
 	if err != nil {
 		return ""
 	}
-	for {
-		candidate := filepath.Join(wd, "skills", "default")
-		if info, err := os.Stat(candidate); err == nil && info.IsDir() {
-			return candidate
-		}
-		parent := filepath.Dir(wd)
-		if parent == wd {
-			return ""
-		}
-		wd = parent
-	}
+	return defaults
 }
 
 func locateRepoPath(parts ...string) string {

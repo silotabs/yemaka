@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"yemaka/internal/learning"
+	"yemaka/internal/memory"
 	"yemaka/internal/routing"
 )
 
@@ -42,7 +43,21 @@ func (s *Service) handleRouteCorrectionChat(ctx context.Context, conversationID 
 		}
 	}
 
-	previousPrompt, err := s.previousUserPrompt(ctx, conversationID)
+	return false, nil
+}
+
+func (s *Service) handleSelectedRouteCorrectionChat(ctx context.Context, conversationID string, currentMessageID string, parentMessageID string, content string, skillName string, skillVersion string, plan Plan, meta toolRunMetadata, acceptedUserMessage *memory.Message, emit EventHandler) (bool, error) {
+	if s == nil || s.Memory == nil {
+		return false, nil
+	}
+	if plan.RouteCategory != routing.RouteLearningAction || plan.RouteCapability != "route_correction" {
+		return false, nil
+	}
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return false, nil
+	}
+	previousPrompt, err := s.previousUserPromptBeforeMessage(ctx, conversationID, currentMessageID)
 	if err != nil {
 		return false, err
 	}
@@ -55,20 +70,28 @@ func (s *Service) handleRouteCorrectionChat(ctx context.Context, conversationID 
 		return false, nil
 	}
 	if proposal.NeedsClarification {
-		return true, s.completeRouteCorrectionTurn(ctx, conversationID, parentMessageID, content, skillName, skillVersion, proposal.Response, meta, emit, true)
+		plan.NeedsClarification = true
+		plan.ClarificationQuestion = proposal.Response
+		plan.RouteCategory = routing.RouteClarify
+		plan.RouteIntent = routing.IntentClarify
+		return true, s.completeWithoutModel(ctx, conversationID, meta, parentMessageID, content, skillName, skillVersion, plan, ExecutionDecision{
+			Status:    ExecutionNotRequired,
+			RiskLevel: RiskLow,
+			Reason:    "route correction learning needs a clearer reusable route before saving",
+		}, nil, nil, proposal.Response, acceptedUserMessage, emit)
 	}
-	conversation, err := s.ensureConversation(ctx, conversationID, content)
-	if err != nil {
-		return false, err
-	}
-	proposal.Correction.SourceConversationID = conversation.ID
+	proposal.Correction.SourceConversationID = conversationID
 	if proposal.Correction.OriginalPrompt == "" {
 		proposal.Correction.OriginalPrompt = previousPrompt
 	}
 	if _, err := learning.SaveRouteCorrection(ctx, s.Memory, proposal.Correction); err != nil {
 		return false, err
 	}
-	return true, s.completeRouteCorrectionTurn(ctx, conversation.ID, parentMessageID, content, skillName, skillVersion, proposal.Response, meta, emit, false)
+	return true, s.completeWithoutModel(ctx, conversationID, meta, parentMessageID, content, skillName, skillVersion, plan, ExecutionDecision{
+		Status:    ExecutionNotRequired,
+		RiskLevel: RiskLow,
+		Reason:    "route correction learning is handled locally and requires no tool execution",
+	}, nil, nil, proposal.Response, acceptedUserMessage, emit)
 }
 
 func (s *Service) completeRouteCorrectionTurn(ctx context.Context, conversationID string, parentMessageID string, content string, skillName string, skillVersion string, response string, meta toolRunMetadata, emit EventHandler, clarify bool) error {
@@ -121,16 +144,25 @@ func learningCorrectionClarification(clarify bool) string {
 }
 
 func (s *Service) previousUserPrompt(ctx context.Context, conversationID string) (string, error) {
+	return s.previousUserPromptBeforeMessage(ctx, conversationID, "")
+}
+
+func (s *Service) previousUserPromptBeforeMessage(ctx context.Context, conversationID string, excludeMessageID string) (string, error) {
 	conversationID = strings.TrimSpace(conversationID)
 	if conversationID == "" || s == nil || s.Memory == nil {
 		return "", nil
 	}
+	excludeMessageID = strings.TrimSpace(excludeMessageID)
 	messages, err := s.Memory.ListConversationMessages(ctx, conversationID, 30)
 	if err != nil {
 		return "", err
 	}
+	messages = memory.ActiveConversationMessages(messages)
 	for i := len(messages) - 1; i >= 0; i-- {
 		msg := messages[i]
+		if excludeMessageID != "" && msg.ID == excludeMessageID {
+			continue
+		}
 		if msg.Role == "user" && strings.TrimSpace(msg.Content) != "" {
 			return strings.TrimSpace(msg.Content), nil
 		}

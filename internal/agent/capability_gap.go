@@ -3,7 +3,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
 	"strings"
 	"time"
@@ -172,6 +171,9 @@ func (r *CapabilityGapRouter) Propose(plan Plan, input PlanInput, decision Execu
 	}
 	lowerRequest := strings.ToLower(request)
 	lowerReason := strings.ToLower(strings.TrimSpace(decision.Reason))
+	if genericRoutingControlRequest(plan, lowerRequest) {
+		return CapabilityGapProposal{}, false
+	}
 	if isExplanationOnlyCapabilityRequest(lowerRequest) {
 		return CapabilityGapProposal{}, false
 	}
@@ -322,11 +324,11 @@ func addTemplateDomainPacks(registry *capabilities.Registry) {
 	if registry == nil {
 		return
 	}
-	repoRoot := workflowTemplateRepoRoot()
-	if repoRoot == "" {
+	root, err := workflows.BuiltInTemplateRoot()
+	if err != nil {
 		return
 	}
-	catalog, err := workflows.NewBuiltInTemplateCatalog(repoRoot)
+	catalog, err := workflows.NewBuiltInTemplateCatalog(root)
 	if err != nil {
 		return
 	}
@@ -339,25 +341,6 @@ func addTemplateDomainPacks(registry *capabilities.Registry) {
 			continue
 		}
 		_ = registry.AddDomainPack(pack)
-	}
-}
-
-func workflowTemplateRepoRoot() string {
-	dir, err := os.Getwd()
-	if err != nil {
-		return ""
-	}
-	dir = filepath.Clean(dir)
-	for {
-		templates := filepath.Join(dir, "packs", "templates")
-		if info, err := os.Stat(templates); err == nil && info.IsDir() {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return ""
-		}
-		dir = parent
 	}
 }
 
@@ -1031,6 +1014,23 @@ func isCapabilityGapDecision(decision ExecutionDecision) bool {
 		return true
 	case ExecutionReady:
 		return strings.TrimSpace(decision.ToolName) != ""
+	default:
+		return false
+	}
+}
+
+func genericRoutingControlRequest(plan Plan, lowerRequest string) bool {
+	lowerRequest = strings.Trim(strings.ToLower(strings.Join(strings.Fields(lowerRequest), " ")), ".!?")
+	if lowerRequest == "" {
+		return true
+	}
+	frame := plan.MessageFrame
+	if frame.IsRewriteLike || frame.IsSocialTurn || frame.IsApprovalLike || frame.IsApplyLike || frame.IsLastResponseArtifactAction {
+		return true
+	}
+	switch lowerRequest {
+	case "continue", "yes", "no", "ok", "okay", "what do you mean", "make better", "make this better", "make it better":
+		return true
 	default:
 		return false
 	}

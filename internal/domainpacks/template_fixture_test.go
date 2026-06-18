@@ -1,6 +1,7 @@
 package domainpacks
 
 import (
+	"os"
 	"path/filepath"
 	"sort"
 	"testing"
@@ -143,11 +144,10 @@ func TestLocalFileTriageTemplateInstallableDisabledAndLoadable(t *testing.T) {
 }
 
 func TestBuiltInTemplatesInstallDisabledEnableDisableMatrix(t *testing.T) {
-	sources, err := filepath.Glob(filepath.Join("..", "..", "packs", "templates", "*"))
+	sources, err := builtInTemplateSources()
 	if err != nil {
-		t.Fatalf("glob built-in templates: %v", err)
+		t.Fatalf("list built-in templates: %v", err)
 	}
-	sort.Strings(sources)
 	if len(sources) == 0 {
 		t.Fatal("no built-in templates found")
 	}
@@ -226,4 +226,27 @@ func TestBuiltInTemplatesInstallDisabledEnableDisableMatrix(t *testing.T) {
 			}
 		})
 	}
+}
+
+func builtInTemplateSources() ([]string, error) {
+	sources, err := filepath.Glob(filepath.Join("..", "..", "packs", "templates", "*"))
+	if err != nil {
+		return nil, err
+	}
+	filtered := make([]string, 0, len(sources))
+	for _, source := range sources {
+		info, err := os.Stat(source)
+		if err != nil {
+			return nil, err
+		}
+		if !info.IsDir() {
+			continue
+		}
+		if _, err := os.Stat(filepath.Join(source, "pack.yaml")); err != nil {
+			continue
+		}
+		filtered = append(filtered, source)
+	}
+	sort.Strings(filtered)
+	return filtered, nil
 }

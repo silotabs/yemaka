@@ -192,3 +192,64 @@ func TestPrepareAssistantPresentationStripsTaskExecutionScaffold(t *testing.T) {
 		t.Fatalf("PrepareAssistantPresentation() removed user-facing summary:\n%s", response)
 	}
 }
+
+func TestGroundUnsupportedActionClaimDowngradesSavedClaim(t *testing.T) {
+	plan := BuildPlan(PlanInput{Content: "Save your last response as trends.md"})
+	response := GroundUnsupportedActionClaim("I saved the file as trends.md.", plan, ExecutionDecision{}, nil)
+	lower := strings.ToLower(response)
+	for _, unwanted := range []string{"i saved", "saved the file", "saved as"} {
+		if strings.Contains(lower, unwanted) {
+			t.Fatalf("GroundUnsupportedActionClaim() leaked unsupported claim %q:\n%s", unwanted, response)
+		}
+	}
+	for _, want := range []string{"unverified", "trusted tool evidence", "pending"} {
+		if !strings.Contains(lower, want) {
+			t.Fatalf("GroundUnsupportedActionClaim() missing %q:\n%s", want, response)
+		}
+	}
+	if result := VerifyResponse(plan, response); result.Status != "pass" {
+		t.Fatalf("VerifyResponse() after downgrade = %q, want pass; result=%+v response=%q", result.Status, result, response)
+	}
+}
+
+func TestGroundUnsupportedActionClaimAllowsTrustedWriteEvidence(t *testing.T) {
+	plan := BuildPlan(PlanInput{Content: "Save your last response as trends.md"})
+	decision := ExecutionDecision{ToolName: "write_file", Status: ExecutionReady}
+	result := &ExecutionResult{Status: "completed", SourceKind: "workspace"}
+	content := "I saved the file as trends.md."
+	response := GroundUnsupportedActionClaim(content, plan, decision, result)
+	if response != content {
+		t.Fatalf("GroundUnsupportedActionClaim() = %q, want trusted success wording preserved", response)
+	}
+	verification := VerifyResponseWithEvidence(plan, response, decision, result)
+	if verification.Status != "pass" {
+		t.Fatalf("VerifyResponseWithEvidence() = %q, want pass; result=%+v", verification.Status, verification)
+	}
+}
+
+func TestGroundUnsupportedActionClaimAllowsNormalFactualConfirmedWording(t *testing.T) {
+	plan := BuildPlan(PlanInput{Content: "What did the report say?"})
+	content := "The report confirmed the rollout timeline and summarized the risks."
+	response := GroundUnsupportedActionClaim(content, plan, ExecutionDecision{}, nil)
+	if response != content {
+		t.Fatalf("GroundUnsupportedActionClaim() = %q, want factual confirmed wording unchanged", response)
+	}
+	verification := VerifyResponse(plan, response)
+	if verification.Status != "pass" {
+		t.Fatalf("VerifyResponse() = %q, want pass; result=%+v", verification.Status, verification)
+	}
+}
+
+func TestActionRiskRoutesBufferUntilGrounding(t *testing.T) {
+	plan := BuildPlan(PlanInput{Content: "Save your last response as trends.md"})
+	if shouldStreamInitialModelOutput(plan, nil, nil) {
+		t.Fatal("shouldStreamInitialModelOutput() = true, want action-risk routes buffered until grounding")
+	}
+	if !shouldEmitBufferedAfterGrounding(plan, false) {
+		t.Fatal("shouldEmitBufferedAfterGrounding() = false, want post-grounding emit for buffered action-risk route")
+	}
+	rewrite := BuildPlan(PlanInput{Content: "make this better: hello dear sir"})
+	if !shouldStreamInitialModelOutput(rewrite, nil, nil) {
+		t.Fatal("shouldStreamInitialModelOutput(rewrite) = false, want normal rewrite streaming allowed")
+	}
+}

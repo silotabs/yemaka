@@ -231,6 +231,33 @@ func TestVerifyResponseFlagsInternalScaffoldLeak(t *testing.T) {
 	}
 }
 
+func TestVerifyResponseFlagsUnsupportedActionClaims(t *testing.T) {
+	plan := BuildPlan(PlanInput{Content: "Save your last response as trends.md"})
+	result := VerifyResponse(plan, "I saved the file as trends.md.")
+	if result.Status != "needs_follow_up" {
+		t.Fatalf("Status = %q, want needs_follow_up; result=%+v", result.Status, result)
+	}
+	if !containsString(result.Reasons, "assistant claimed saved without trusted tool or approval evidence") {
+		t.Fatalf("Reasons = %#v, want unsupported saved-claim reason", result.Reasons)
+	}
+}
+
+func TestVerifyResponseAllowsPreparedPendingActionLanguage(t *testing.T) {
+	plan := BuildPlan(PlanInput{Content: "Save your last response as trends.md"})
+	result := VerifyResponse(plan, "I have not changed the file. I prepared an edit proposal for trends.md and it needs your approval first.")
+	if result.Status != "pass" {
+		t.Fatalf("Status = %q, want pass; result=%+v", result.Status, result)
+	}
+}
+
+func TestVerifyResponseDoesNotBlockRewriteText(t *testing.T) {
+	plan := BuildPlan(PlanInput{Content: "make this better: hello dear sir"})
+	result := VerifyResponse(plan, "Hello, I hope you are doing well.")
+	if result.Status != "pass" {
+		t.Fatalf("Status = %q, want pass; result=%+v", result.Status, result)
+	}
+}
+
 func TestContextGroundingGuidanceIncludesCurrentDateForSearchFreshness(t *testing.T) {
 	guidance := ContextGroundingGuidance()
 	if !strings.Contains(guidance, time.Now().Format("2006-01-02")) {

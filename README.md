@@ -68,6 +68,10 @@ The local web app binds to loopback by default:
 http://127.0.0.1:7727
 ```
 
+The default macOS install home is `~/Library/Application Support/Yemaka`.
+You can choose another dedicated Yemaka folder with `--home`; see the
+[install guide](docs/install.md) for path guidance.
+
 ## Capabilities
 
 - Chat with local Ollama models.

@@ -51,6 +51,26 @@ func TestListDocumentsIncludesChunkAndEmbeddingCounts(t *testing.T) {
 	}
 }
 
+func TestListDocumentsEmptyReturnsNonNilSlice(t *testing.T) {
+	ctx := context.Background()
+	store, err := Open(ctx, filepath.Join(t.TempDir(), "memory.sqlite"))
+	if err != nil {
+		t.Fatalf("Open() error = %v", err)
+	}
+	defer store.Close()
+
+	items, err := store.ListDocuments(ctx, 10)
+	if err != nil {
+		t.Fatalf("ListDocuments() error = %v", err)
+	}
+	if items == nil {
+		t.Fatal("ListDocuments() returned nil slice, want empty slice")
+	}
+	if len(items) != 0 {
+		t.Fatalf("len(items) = %d, want 0", len(items))
+	}
+}
+
 func TestListDocumentsMarksDeletedAndChangedFilesystemSources(t *testing.T) {
 	ctx := context.Background()
 	root := t.TempDir()

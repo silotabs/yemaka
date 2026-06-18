@@ -489,6 +489,16 @@ func TestPostRCDeterministicRoutingMatrix(t *testing.T) {
 			minConfidence: 70,
 		},
 		{
+			name:          "rewrite prompt needs no source clarification",
+			prompt:        "make this better: hello dear sir",
+			wantTask:      TaskChat,
+			wantRoute:     RouteChatExplanation,
+			wantIntent:    IntentExplain,
+			wantRisk:      RiskLow,
+			notTools:      []string{"safe_tool", "internet_fetch", "internet_search", "rag_search", "read_file", "search_files"},
+			minConfidence: 70,
+		},
+		{
 			name:          "internet search action",
 			prompt:        "Search the web for SearXNG documentation.",
 			wantTask:      TaskTool,

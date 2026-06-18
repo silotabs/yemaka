@@ -65,6 +65,11 @@ func TestRunnerHelpAndQuit(t *testing.T) {
 	if !strings.Contains(output.String(), "Commands:") {
 		t.Fatalf("output does not include commands:\n%s", output.String())
 	}
+	for _, want := range []string{"__   __", "Local-first agent console", "status:"} {
+		if !strings.Contains(output.String(), want) {
+			t.Fatalf("line TUI header missing %q:\n%s", want, output.String())
+		}
+	}
 	if !strings.Contains(output.String(), "bye") {
 		t.Fatalf("output does not include goodbye:\n%s", output.String())
 	}
@@ -598,7 +603,7 @@ func TestBubbleModelViewRendersCorePanels(t *testing.T) {
 	model.status = diagnosticsRunForTest(context.Background(), runner)
 	model.resize()
 	view := model.View()
-	for _, want := range []string{"Yemaka TUI", "Chat", "Command", "Memory", "Learning"} {
+	for _, want := range []string{"__   __", "Yemaka TUI", "Local-first agent console", "Chat", "Command", "Memory", "Learning"} {
 		if !strings.Contains(view, want) {
 			t.Fatalf("view missing %q:\n%s", want, view)
 		}

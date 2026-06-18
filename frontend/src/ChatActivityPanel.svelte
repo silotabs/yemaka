@@ -40,7 +40,7 @@
         <SectionHeader
           compact
           icon="health"
-          title="Permissions"
+          title="Approvals"
           description="Review exact tool actions before Yemaka continues."
           meta={`${pendingPermissionItems.length} pending`}
         />
@@ -102,8 +102,8 @@
     <SectionHeader
       compact
       icon="automation"
-      title="Tool Activity"
-      description="Live steps, approvals, and persisted local tool logs."
+      title="Activity"
+      description="Live steps, approvals, and local action history."
       meta={`${activity.length + groupedToolRuns.length} items`}
     />
   </div>
@@ -112,7 +112,7 @@
       <EmptyState
         icon="automation"
         title="No activity yet"
-        message="Live tool steps, approvals, and persisted tool logs will appear here while Yemaka works."
+        message="Live steps, approvals, and local action history will appear here while Yemaka works."
       />
     {/if}
     {#if activity.length}
@@ -139,7 +139,7 @@
       </div>
     {/if}
     {#if groupedToolRuns.length}
-      <div class="activity-section-label">Persisted logs</div>
+      <div class="activity-section-label">Local action history</div>
       {#each pagedItems(groupedToolRuns, 'activity-run-groups', 5, listPages) as group (group.id)}
         <div class="activity-run-group">
           <button class="activity-run-header" type="button" onclick={() => toggleToolRunGroup(group.id)}>

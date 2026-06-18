@@ -36,9 +36,116 @@ export function sourceKindLabel(kind: string | undefined) {
   if (value === 'workspace') return 'workspace';
   if (value === 'internet') return 'internet';
   if (value === 'memory') return 'memory';
-  if (value === 'tool' || value === 'tools') return 'tools';
+  if (value === 'tool' || value === 'tools') return 'local action';
   if (value === 'chat') return 'chat';
   return value.replace(/_/g, ' ');
+}
+
+const productToolLabels: Record<string, string> = {
+  agent_executor: 'Local action check',
+  agent_verifier: 'Result check',
+  edit_file: 'File change',
+  edit_proposal: 'File change prepared',
+  internet_crawl: 'Web crawl',
+  internet_fetch: 'Web fetch',
+  internet_head: 'Web check',
+  internet_search: 'Web search',
+  memory_search: 'Memory search',
+  memory_write: 'Memory update',
+  permission_decision: 'Approval decision',
+  permission_request: 'Approval required',
+  permission_result: 'Approval result',
+  project_map: 'Project map',
+  rag_search: 'Local document search',
+  read_file: 'File read',
+  route_recovery: 'Route recovery',
+  run_shell_safe: 'Safe command',
+  workspace_read: 'Workspace read',
+  write_file: 'File write'
+};
+
+const productStatusLabels: Record<string, string> = {
+  approved: 'Approved',
+  blocked: 'Blocked',
+  completed: 'Completed',
+  decided: 'Selected',
+  failed: 'Could not complete',
+  logged: 'Logged',
+  not_required: 'Not needed',
+  pass: 'Passed',
+  passed: 'Passed',
+  pending: 'Waiting',
+  prepared: 'Prepared',
+  ready: 'Ready',
+  rejected: 'Rejected',
+  running: 'Working',
+  skipped: 'Skipped',
+  warning: 'Needs review'
+};
+
+export function productToolLabel(name: string | undefined, fallback = 'Local action') {
+  const clean = String(name || '').trim();
+  if (!clean) return fallback;
+  const normalized = clean.toLowerCase().replace(/[\s-]+/g, '_');
+  return productToolLabels[normalized] || humanizeIdentifier(clean, fallback);
+}
+
+export function productStatusLabel(status: string | undefined, fallback = 'Available') {
+  const clean = String(status || '').trim();
+  if (!clean) return fallback;
+  const normalized = clean.toLowerCase().replace(/[\s-]+/g, '_');
+  return productStatusLabels[normalized] || humanizeIdentifier(clean, fallback);
+}
+
+export function assistantModelDisplayLabel(model: string | undefined) {
+  const clean = String(model || '').trim();
+  if (!clean) return '';
+  const normalized = clean.toLowerCase().replace(/[\s-]+/g, '_');
+  if (normalized === 'yemaka_executor') return 'Local action';
+  if (normalized === 'agent_executor') return 'Local action';
+  if (normalized === 'permission_result' || normalized === 'permission_request' || normalized === 'permission_decision') return 'Approval';
+  if (productToolLabels[normalized]) return productToolLabels[normalized];
+  return clean;
+}
+
+export function productActivityLabel(line: string) {
+  const clean = String(line || '').replace(/\s+/g, ' ').trim();
+  if (!clean) return '';
+  const [prefixRaw, restRaw = ''] = clean.split(/:(.*)/s);
+  const prefix = prefixRaw.toLowerCase().trim();
+  const rest = restRaw.trim();
+  if (!rest && prefix === clean.toLowerCase()) return clean;
+
+  if (prefix === 'executor') {
+    const parts = rest.split(' ').filter(Boolean);
+    const status = parts.shift() || 'ready';
+    const tool = parts.join(' ');
+    if (status === 'not_required') return 'No local action needed';
+    const label = tool ? productToolLabel(tool) : 'Local action';
+    return `${label}: ${productStatusLabel(status, 'Selected')}`;
+  }
+  if (prefix === 'tool' || prefix === 'tool completed') {
+    const match = rest.match(/^(.+?)\s*\(([^)]+)\)$/);
+    const tool = match?.[1] || rest;
+    const status = match?.[2] || (prefix === 'tool completed' ? 'completed' : '');
+    return `${productToolLabel(tool)}${status ? `: ${productStatusLabel(status, 'Completed')}` : ''}`;
+  }
+  if (prefix === 'permission' || prefix === 'permission needed') {
+    return `Approval required${rest ? `: ${productToolLabel(rest)}` : ''}`;
+  }
+  if (prefix === 'edit proposed' || prefix === 'edit proposal') {
+    return `File change prepared${rest ? `: ${rest}` : ''}`;
+  }
+  if (prefix === 'model tool call') {
+    return `Tool request prepared${rest ? `: ${rest}` : ''}`;
+  }
+  if (prefix === 'verification') {
+    return `Result check: ${productStatusLabel(rest, rest || 'Checked')}`;
+  }
+  if (prefix === 'route advisory') {
+    return `Routing check${rest ? `: ${rest}` : ''}`;
+  }
+  return clean;
 }
 
 export function humanizeIdentifier(value: string | undefined, fallback = 'Unknown') {
