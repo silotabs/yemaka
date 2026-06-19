@@ -42,7 +42,7 @@ func TestDeterministicAgentRouterFoundationContract(t *testing.T) {
 		UpdatedAt:              now,
 	}
 
-	t.Run("routes_codex_thread_prompts_without_prompt_stealing", func(t *testing.T) {
+	t.Run("routes_yemaka_thread_prompts_without_prompt_stealing", func(t *testing.T) {
 		cases := []struct {
 			name                string
 			content             string

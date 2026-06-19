@@ -37,6 +37,7 @@ or rewrite unrelated user changes.
 ## Build And Test
 
 ```bash
+go test ./internal/agent -run TestDeterministicAgentRouterFoundationContract -v
 go test ./...
 npm --prefix frontend run build
 npm --prefix frontend run test:smoke
@@ -50,6 +51,31 @@ YEMAKA_HOME=/private/tmp/yemaka-release-clean-check go run ./cmd/yemaka release 
 If browser E2E cannot run because Playwright browser binaries are missing,
 record that as a QA environment gap and install the browser dependency on the
 QA machine before packaging sign-off.
+
+## Foundation Checkpoint
+
+Before expansion or release sign-off, confirm the deterministic routing kernel
+still holds:
+
+```text
+message frame -> session state -> route candidates -> arbiter -> execution -> truth gate
+```
+
+The guard test is:
+
+```bash
+go test ./internal/agent -run TestDeterministicAgentRouterFoundationContract -v
+```
+
+This test protects the public-beta bugs that are easiest to accidentally
+reintroduce: rewrite prompts stolen by route correction, completed tasks
+continuing old web-search routes, `apply it` without pending operation evidence,
+last-response export using operational messages instead of the final answer,
+and unsupported action-success claims.
+
+Maintainers keep this test as a release invariant. New behavior is introduced
+with a focused failing case first, preserving the thin-core routing contract.
+See [Routing kernel](routing-kernel.md).
 
 ## Install QA
 

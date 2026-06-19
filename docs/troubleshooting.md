@@ -122,6 +122,22 @@ copy. That is different from granting the original folder path.
 File writes require approval, snapshot, diff, and rollback metadata before
 Yemaka applies the change.
 
+## Local Action Messages
+
+The chat UI may show activity such as Local action, Approval required, File
+change prepared, or Result check. These are operational status records, not a
+second assistant persona.
+
+Yemaka stores the underlying evidence in local `tool_runs`, replay traces,
+permission records, and session state. Follow-up prompts such as `apply it`,
+`did you create the file?`, or `save your last response as test.md` resolve
+from that stored evidence.
+
+For `last response` exports, Yemaka uses the last valid final assistant
+answer, not an approval/status/local-action message.
+
+Engineering details are in [Routing kernel](routing-kernel.md).
+
 ## Active-Profile Warnings
 
 The active developer profile may point to custom models or optional systems.

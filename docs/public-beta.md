@@ -61,6 +61,10 @@ surface.
 - Scheduler jobs that require approval before creation and enablement.
 - Route recovery, context compaction, replay traces, QAReview, and
   product-grade failure messages.
+- Deterministic routing-kernel regression coverage for rewrite/editorial
+  prompts, route-correction teaching, continuation, pending approval/apply,
+  last-response artifact actions, local-action evidence, and truth-gated action
+  claims.
 - Disabled-by-default internet/search, connectors, embeddings, cloud fallback,
   crawler influence, and generated connector runtime.
 
@@ -91,6 +95,23 @@ approvals, tool lanes, or the selected final route.
 Knowledge graph records and domain packs are advisory only. They may contribute
 reviewed context or capability hints, but they cannot silently override routing
 or enable optional systems.
+
+## Routing Foundation
+
+Yemaka's routing foundation is deterministic and state-first:
+
+```text
+message frame -> session state -> route candidates -> arbiter -> execution -> truth gate
+```
+
+Route correction, continuation, domain packs, skills, source selection, file
+actions, and tool lanes contribute typed signals or candidates to the same
+arbitration path. The main UI labels executor activity as Local action, Approval
+required, File change prepared, or Result check, while backend tool-run and
+replay evidence remains available through Inspect and diagnostics.
+
+The engineering details and regression coverage are documented in
+[Routing kernel](routing-kernel.md).
 
 ## Release Gate
 
@@ -135,5 +156,6 @@ scripts/install/doctor.sh
 Related docs:
 
 - [Install guide](install.md)
+- [Routing kernel](routing-kernel.md)
 - [Release checklist](release.md)
 - [Troubleshooting](troubleshooting.md)

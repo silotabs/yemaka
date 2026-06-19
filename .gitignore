@@ -19,6 +19,7 @@ docs/*
 !docs/install.md
 !docs/public-beta.md
 !docs/release.md
+!docs/routing-kernel.md
 !docs/troubleshooting.md
 build/
 dist/
