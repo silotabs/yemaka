@@ -557,6 +557,15 @@ if [ "$INSTALL_TYPE" = "web" ]; then
 			fail "frontend/dist is missing and frontend build was skipped"
 		fi
 		command_exists npm || fail "npm is required because frontend/dist is missing"
+		if [ ! -x "$repo_root/frontend/node_modules/.bin/vite" ]; then
+			say "Installing web app dependencies."
+			note "This uses the locked frontend dependencies and may need internet access. Details are saved to: $LOG_FILE"
+			if run_logged "$LOG_FILE" npm --prefix frontend ci; then
+				ok "Installed web app dependencies."
+			else
+				fail "web dependency install failed. Check npm access and see the install log: $LOG_FILE"
+			fi
+		fi
 		say "Building web app assets."
 		note "This can take a minute. Frontend build details are saved to: $LOG_FILE"
 		if run_logged "$LOG_FILE" npm --prefix frontend run build; then

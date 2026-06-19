@@ -94,6 +94,10 @@ yemaka internet status
 
 Configure a provider only when you want controlled search access. API-key
 providers should use environment variable names, not raw key values in config.
+After adding or changing an API-key or connector environment variable, save the
+setting and use **Restart Yemaka** in Settings. The restart control warns before
+interrupting active work. When running `yemaka serve` from a terminal, set the
+environment variable in that terminal before starting Yemaka again.
 
 ## File Access Or Document Ingest Fails
 

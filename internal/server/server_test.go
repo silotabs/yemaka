@@ -3357,6 +3357,52 @@ func TestSettingsEndpointGuardsOptionalFeatures(t *testing.T) {
 	}
 }
 
+func TestRuntimeControlEndpointsUseConfiguredLifecycle(t *testing.T) {
+	srv, cleanup := newTestServer(t)
+	defer cleanup()
+
+	var actions []string
+	srv.deps.RuntimeControl = func(action string) (RuntimeControlResult, error) {
+		actions = append(actions, action)
+		return RuntimeControlResult{Action: action, Accepted: true, Message: "accepted " + action}, nil
+	}
+
+	for _, path := range []string{"/api/runtime/restart", "/api/runtime/shutdown"} {
+		recorder := httptest.NewRecorder()
+		request := httptest.NewRequest(http.MethodPost, path, nil)
+		request.Header.Set("X-Yemaka-Runtime-Control", "1")
+		srv.Handler().ServeHTTP(recorder, request)
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("%s status = %d, want 200; body: %s", path, recorder.Code, recorder.Body.String())
+		}
+		var result RuntimeControlResult
+		if err := json.Unmarshal(recorder.Body.Bytes(), &result); err != nil {
+			t.Fatalf("decode %s result: %v", path, err)
+		}
+		if !result.Accepted || result.Action == "" {
+			t.Fatalf("%s result = %+v, want accepted action", path, result)
+		}
+	}
+	if strings.Join(actions, ",") != "restart,shutdown" {
+		t.Fatalf("runtime control actions = %v", actions)
+	}
+
+	srv.deps.RuntimeControl = nil
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/runtime/restart", nil)
+	request.Header.Set("X-Yemaka-Runtime-Control", "1")
+	srv.Handler().ServeHTTP(recorder, request)
+	if recorder.Code != http.StatusNotImplemented {
+		t.Fatalf("unavailable runtime control status = %d, want 501; body: %s", recorder.Code, recorder.Body.String())
+	}
+
+	recorder = httptest.NewRecorder()
+	srv.Handler().ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/runtime/restart", nil))
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("unmarked runtime control status = %d, want 403; body: %s", recorder.Code, recorder.Body.String())
+	}
+}
+
 func TestSettingsEndpointAcceptsSettingsViewRoundTrip(t *testing.T) {
 	srv, cleanup := newTestServer(t)
 	defer cleanup()

@@ -85,6 +85,41 @@ export function defaultSettingsForm(): SettingsFormState {
   };
 }
 
+export function settingsFormsEqual(left: SettingsFormState, right: SettingsFormState) {
+  return (
+    left.lowMemory === right.lowMemory &&
+    left.contextTokens === right.contextTokens &&
+    left.responseMode === right.responseMode &&
+    left.showThinkingTrace === right.showThinkingTrace &&
+    left.ragEnabled === right.ragEnabled &&
+    left.embeddingsEnabled === right.embeddingsEnabled &&
+    left.embeddingModel === right.embeddingModel &&
+    left.theme === right.theme &&
+    left.cloudEnabled === right.cloudEnabled &&
+    left.cloudBaseURL === right.cloudBaseURL &&
+    left.cloudModel === right.cloudModel &&
+    left.cloudKeyEnv === right.cloudKeyEnv &&
+    left.connectorEnabled === right.connectorEnabled &&
+    left.connectorTokenEnv === right.connectorTokenEnv &&
+    left.mcpConnectorEnabled === right.mcpConnectorEnabled &&
+    left.slackConnectorEnabled === right.slackConnectorEnabled &&
+    left.slackConnectorTokenEnv === right.slackConnectorTokenEnv &&
+    left.discordConnectorEnabled === right.discordConnectorEnabled &&
+    left.discordConnectorTokenEnv === right.discordConnectorTokenEnv &&
+    left.telegramConnectorEnabled === right.telegramConnectorEnabled &&
+    left.telegramConnectorTokenEnv === right.telegramConnectorTokenEnv &&
+    left.emailConnectorEnabled === right.emailConnectorEnabled &&
+    left.emailConnectorTokenEnv === right.emailConnectorTokenEnv &&
+    left.internetEnabled === right.internetEnabled &&
+    left.internetSearchEnabled === right.internetSearchEnabled &&
+    left.internetSearchProvider === right.internetSearchProvider &&
+    left.internetSearchProviderSnapshot === right.internetSearchProviderSnapshot &&
+    left.internetSearchEndpoint === right.internetSearchEndpoint &&
+    left.internetSearchAPIKeyEnv === right.internetSearchAPIKeyEnv &&
+    left.knowledgeInfluenceEnabled === right.knowledgeInfluenceEnabled
+  );
+}
+
 export function settingsFormFromView(value: SettingsView | null, current: SettingsFormState = defaultSettingsForm()) {
   if (!value) return current;
   const ui: UIConfig = value.ui ?? value.UI ?? {};

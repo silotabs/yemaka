@@ -182,7 +182,7 @@ $portUsed = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction Sil
 if ($portUsed) {
   Write-Warning "Port $Port is already in use. You can run yemaka serve --addr 127.0.0.1:<free-port>."
 } else {
-  Write-Host "Port $Port: available"
+  Write-Host "Port ${Port}: available"
 }
 
 if (Command-Exists "ollama") {
@@ -230,6 +230,7 @@ if (Test-Path (Join-Path $RepoRoot "cmd\yemaka\main.go")) {
   Write-Host "Building the local Yemaka app binary."
   Write-Host "This can take a minute on the first run while Go compiles local SQLite/database support. Build details are saved to: $LogFile" -ForegroundColor DarkGray
   & go build -o $InstallBin .\cmd\yemaka *> $LogFile
+  if ($LASTEXITCODE -ne 0) { throw "Yemaka build failed. See the install log: $LogFile" }
   Write-Host "Built app binary: $InstallBin" -ForegroundColor Green
 } elseif (Command-Exists "yemaka") {
   Copy-Item (Get-Command yemaka).Source $InstallBin -Force
@@ -243,9 +244,18 @@ if ($Type -eq "web") {
   if (-not (Test-Path $distIndex)) {
     if ($SkipFrontendBuild) { throw "frontend\dist is missing and frontend build was skipped." }
     if (-not (Command-Exists "npm")) { throw "npm is required because frontend\dist is missing." }
+    $frontendBuildTool = Join-Path $RepoRoot "frontend\node_modules\.bin\vite.cmd"
+    if (-not (Test-Path $frontendBuildTool)) {
+      Write-Host "Installing web app dependencies."
+      Write-Host "This uses the locked frontend dependencies and may need internet access. Details are saved to: $LogFile" -ForegroundColor DarkGray
+      & npm --prefix frontend ci *>> $LogFile
+      if ($LASTEXITCODE -ne 0) { throw "Web dependency install failed. Check npm access and see the install log: $LogFile" }
+      Write-Host "Installed web app dependencies." -ForegroundColor Green
+    }
     Write-Host "Building web app assets."
     Write-Host "This can take a minute. Frontend build details are saved to: $LogFile" -ForegroundColor DarkGray
-    & npm --prefix frontend run build *> $LogFile
+    & npm --prefix frontend run build *>> $LogFile
+    if ($LASTEXITCODE -ne 0) { throw "Web build failed. See the install log: $LogFile" }
     Write-Host "Built web app assets." -ForegroundColor Green
   }
   $webDir = Join-Path $InstallHome "web"

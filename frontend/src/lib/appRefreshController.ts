@@ -23,7 +23,7 @@ export type AppRefreshControllerContext = {
   setStatus: (status: Status) => void;
   setSetupState: (setupState: SetupState) => void;
   setSettings: (settings: SettingsView) => void;
-  syncSettingsForm: (settings: SettingsView | null) => void;
+  syncSettingsForm: (settings: SettingsView | null, preserveDraft?: boolean) => boolean | void;
   refreshAutomation: (silent?: boolean) => Promise<void>;
   refreshLearning: (silent?: boolean) => Promise<void>;
   refreshExtensions: (silent?: boolean) => Promise<void>;
@@ -86,7 +86,7 @@ export function createAppRefreshController(ctx: AppRefreshControllerContext) {
       ctx.setStatus(runtimeSettings.status);
       ctx.setSetupState(runtimeSettings.setupState);
       ctx.setSettings(runtimeSettings.settings);
-      ctx.syncSettingsForm(runtimeSettings.settings);
+      ctx.syncSettingsForm(runtimeSettings.settings, silent);
       return;
     }
     if (target === 'full') {

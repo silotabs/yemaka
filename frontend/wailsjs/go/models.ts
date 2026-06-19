@@ -7715,8 +7715,22 @@ export namespace server {
 		    return a;
 		}
 	}
+	export class RuntimeControlResult {
+	    action: string;
+	    accepted: boolean;
+	    message: string;
 	
+	    static createFrom(source: any = {}) {
+	        return new RuntimeControlResult(source);
+	    }
 	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.action = source["action"];
+	        this.accepted = source["accepted"];
+	        this.message = source["message"];
+	    }
+	}
 
 }
 
@@ -7836,4 +7850,3 @@ export namespace workspace {
 	}
 
 }
-

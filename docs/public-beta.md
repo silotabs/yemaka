@@ -54,6 +54,8 @@ surface.
 - Local chat with installed Ollama models.
 - Response Mode settings for Auto, Fast, Balanced, and Deep local model
   behavior; raw model thinking remains hidden by default.
+- Settings retain an unsaved draft during background health refreshes, with
+  explicit restart and shutdown controls for local runtime changes.
 - SQLite memory and SQLite FTS5 RAG.
 - Local document ingestion with explicit workspace grants.
 - Approval-gated file writes with snapshot, diff, and rollback.

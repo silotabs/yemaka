@@ -115,6 +115,10 @@ pass "install scripts state disabled safe defaults, bundled skills/templates, an
 grep -q "Assert-SafeInstallHome" scripts/install/install.ps1 || fail "Windows installer lacks safe install-home validation"
 grep -q ".yemaka-install-root" scripts/install/install.ps1 || fail "Windows installer lacks install marker"
 grep -q "NoShim" scripts/install/install.ps1 || fail "Windows installer lacks no-shim option"
+grep -Fq 'Port ${Port}: available' scripts/install/install.ps1 || fail "Windows installer has unsafe Port interpolation"
+for script in scripts/install/install.sh scripts/install/install.ps1; do
+	grep -q "npm --prefix frontend ci" "$script" || fail "$script does not install missing locked frontend dependencies"
+done
 pass "Windows installer static safety checks"
 
 say "Installer QA completed."

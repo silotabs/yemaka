@@ -50,7 +50,7 @@ scripts/install/install.sh
 Windows:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/install/install.ps1
+.\scripts\install\install.ps1
 ```
 
 After install:

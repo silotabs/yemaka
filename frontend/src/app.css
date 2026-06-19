@@ -272,6 +272,24 @@ button:not(:disabled):active {
   color: rgb(var(--color-ink));
 }
 
+.profile-settings-button {
+  display: inline-grid;
+  width: 1.75rem;
+  height: 1.75rem;
+  flex: 0 0 auto;
+  place-items: center;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: rgb(var(--color-muted));
+}
+
+.profile-settings-button:hover,
+.profile-settings-button[aria-current='page'] {
+  background: rgb(var(--color-hover));
+  color: rgb(var(--color-pine));
+}
+
 .more-popover {
   position: absolute;
   left: calc(100% + 0.5rem);
@@ -1871,11 +1889,6 @@ button:not(:disabled):active {
   text-transform: uppercase;
 }
 
-.composer-menu-label-subtle {
-  padding-top: 0.65rem;
-  color: rgb(var(--color-muted));
-}
-
 .composer-skill-scroll {
   position: relative;
   max-height: 10.75rem;
@@ -2088,8 +2101,43 @@ button:not(:disabled):active {
   background: transparent;
   padding: 0.35rem 0.55rem;
   color: rgb(var(--color-muted));
-  font-size: 0.84rem;
   text-align: left;
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.composer-more-skills-trigger {
+  display: grid;
+  width: 100%;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 0.45rem;
+  border: 0;
+  border-radius: 0.58rem;
+  background: transparent;
+  padding: 0.65rem 0.55rem 0.35rem;
+  color: rgb(var(--color-muted));
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: 0.08em;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.composer-more-skills-trigger:hover,
+.composer-more-skills-trigger[aria-expanded='true'] {
+  background: rgb(var(--color-hover));
+  color: rgb(var(--color-ink));
+}
+
+.composer-more-skills-trigger svg:last-child {
+  transition: transform 160ms var(--premium-ease);
+}
+
+.composer-more-skills-trigger[aria-expanded='true'] svg:last-child {
+  transform: rotate(90deg);
 }
 
 .composer-route-trigger:hover,

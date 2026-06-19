@@ -6,10 +6,12 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 
@@ -47,17 +49,19 @@ type App struct {
 	ctx context.Context
 	mu  sync.Mutex
 
-	config         *config.Config
-	profile        *profiles.Profile
-	store          *memory.Store
-	rag            *rag.Store
-	skills         skills.Registry
-	modelRuntime   models.Runtime
-	runtimeFactory func(config.ModelConfig) (models.Runtime, error)
-	cloudRuntime   models.Runtime
-	router         *models.Router
-	activeCancel   context.CancelFunc
-	activeRunID    int
+	config          *config.Config
+	profile         *profiles.Profile
+	store           *memory.Store
+	rag             *rag.Store
+	skills          skills.Registry
+	modelRuntime    models.Runtime
+	runtimeFactory  func(config.ModelConfig) (models.Runtime, error)
+	cloudRuntime    models.Runtime
+	router          *models.Router
+	activeCancel    context.CancelFunc
+	activeRunID     int
+	restartLauncher func(path string, args []string, dir string, env []string) error
+	runtimeQuitter  func(context.Context)
 }
 
 type Status struct {
@@ -837,7 +841,11 @@ type GeneratedConnectorEnabledInput struct {
 }
 
 func NewApp() *App {
-	return &App{runtimeFactory: modelruntime.New}
+	return &App{
+		runtimeFactory:  modelruntime.New,
+		restartLauncher: startYemakaProcess,
+		runtimeQuitter:  wailsruntime.Quit,
+	}
 }
 
 func (a *App) Startup(ctx context.Context) {
@@ -856,6 +864,59 @@ func (a *App) Shutdown(ctx context.Context) {
 		_ = a.rag.Close()
 		a.rag = nil
 	}
+}
+
+func (a *App) RequestRestart() (servercore.RuntimeControlResult, error) {
+	executable, err := os.Executable()
+	if err != nil {
+		return servercore.RuntimeControlResult{}, fmt.Errorf("resolve Yemaka executable: %w", err)
+	}
+	dir, err := os.Getwd()
+	if err != nil {
+		return servercore.RuntimeControlResult{}, fmt.Errorf("resolve Yemaka working directory: %w", err)
+	}
+	launcher := a.restartLauncher
+	if launcher == nil {
+		launcher = startYemakaProcess
+	}
+	if err := launcher(executable, append([]string{}, os.Args[1:]...), dir, os.Environ()); err != nil {
+		return servercore.RuntimeControlResult{}, fmt.Errorf("start Yemaka again: %w", err)
+	}
+	a.quitSoon()
+	return servercore.RuntimeControlResult{
+		Action:   "restart",
+		Accepted: true,
+		Message:  "Yemaka is restarting.",
+	}, nil
+}
+
+func (a *App) RequestShutdown() (servercore.RuntimeControlResult, error) {
+	a.quitSoon()
+	return servercore.RuntimeControlResult{
+		Action:   "shutdown",
+		Accepted: true,
+		Message:  "Yemaka is shutting down.",
+	}, nil
+}
+
+func (a *App) quitSoon() {
+	quitter := a.runtimeQuitter
+	if quitter == nil {
+		quitter = wailsruntime.Quit
+	}
+	ctx := a.ctxOrBackground()
+	go func() {
+		// Keep the Wails bridge alive long enough to return the action result.
+		time.Sleep(150 * time.Millisecond)
+		quitter(ctx)
+	}()
+}
+
+func startYemakaProcess(path string, args []string, dir string, env []string) error {
+	command := exec.Command(path, args...)
+	command.Dir = dir
+	command.Env = env
+	return command.Start()
 }
 
 func (a *App) Status() (Status, error) {

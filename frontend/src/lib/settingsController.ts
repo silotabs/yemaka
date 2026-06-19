@@ -16,6 +16,7 @@ import {
 } from './settingsActions';
 import {
   normalizeInternetSearchProviderForm,
+  settingsFormsEqual,
   settingsFormFromView,
   settingsSaveInputFromForm,
   type SettingsFormState
@@ -84,6 +85,7 @@ export type SettingsControllerContext = {
   setKnowledgeInfluenceEnabled: (value: boolean) => void;
   setSettings: (settings: SettingsView | null) => void;
   setSettingsSummary: (summary: string) => void;
+  setSettingsRestartRequired: (value: boolean) => void;
   setEmbeddingIndexSummary: (summary: string) => void;
   setEmbeddingIndexBusy: (busy: boolean) => void;
   getSetupMode: () => string;
@@ -99,6 +101,8 @@ export type SettingsControllerContext = {
 };
 
 export function createSettingsController(ctx: SettingsControllerContext) {
+  let lastServerForm: SettingsFormState | null = null;
+
   function currentSettingsForm(): SettingsFormState {
     return {
       lowMemory: ctx.getLowMemory(),
@@ -167,10 +171,28 @@ export function createSettingsController(ctx: SettingsControllerContext) {
     ctx.setKnowledgeInfluenceEnabled(form.knowledgeInfluenceEnabled);
   }
 
-  function syncSettingsForm(value: SettingsView | null) {
+  function syncSettingsForm(value: SettingsView | null, preserveDraft = false) {
+    if (preserveDraft && lastServerForm && !settingsFormsEqual(currentSettingsForm(), lastServerForm)) {
+      return false;
+    }
     const form = settingsFormFromView(value, currentSettingsForm());
     applySettingsForm(form);
+    lastServerForm = form;
     ctx.applyTheme(form.theme);
+    return true;
+  }
+
+  function settingsChangeNeedsRestart(previous: SettingsFormState | null, next: SettingsFormState) {
+    if (!previous) return false;
+    return (
+      previous.cloudKeyEnv !== next.cloudKeyEnv ||
+      previous.internetSearchAPIKeyEnv !== next.internetSearchAPIKeyEnv ||
+      previous.connectorTokenEnv !== next.connectorTokenEnv ||
+      previous.slackConnectorTokenEnv !== next.slackConnectorTokenEnv ||
+      previous.discordConnectorTokenEnv !== next.discordConnectorTokenEnv ||
+      previous.telegramConnectorTokenEnv !== next.telegramConnectorTokenEnv ||
+      previous.emailConnectorTokenEnv !== next.emailConnectorTokenEnv
+    );
   }
 
   function internetSearchProviderEndpointDisabled() {
@@ -229,10 +251,15 @@ export function createSettingsController(ctx: SettingsControllerContext) {
       return;
     }
     try {
-      const settings = await saveRuntimeSettings(settingsSaveInputFromForm(currentSettingsForm()));
+      const form = currentSettingsForm();
+      const restartRequired = settingsChangeNeedsRestart(lastServerForm, form);
+      const settings = await saveRuntimeSettings(settingsSaveInputFromForm(form));
       ctx.setSettings(settings);
       syncSettingsForm(settings);
-      ctx.setSettingsSummary('settings saved');
+      if (restartRequired) {
+        ctx.setSettingsRestartRequired(true);
+      }
+      ctx.setSettingsSummary(restartRequired ? 'settings saved; restart Yemaka after changing an environment setting' : 'settings saved');
       ctx.pushActivity('settings saved');
       await ctx.refresh();
     } catch (err) {

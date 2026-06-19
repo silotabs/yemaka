@@ -88,6 +88,7 @@
   export let settingInternetSearchEndpoint = '';
   export let settingInternetSearchAPIKeyEnv = '';
   export let settingKnowledgeInfluenceEnabled = false;
+  export let settingsRestartRequired = false;
   export let settingCloudEnabled = false;
   export let settingCloudBaseURL = '';
   export let settingCloudModel = '';
@@ -107,6 +108,8 @@
   export let applyTheme: (theme: string) => void = () => {};
   export let indexEmbeddings: () => Promise<void> | void = () => {};
   export let saveSettings: () => Promise<void> | void = () => {};
+  export let requestRuntimeRestart: () => Promise<void> | void = () => {};
+  export let requestRuntimeShutdown: () => Promise<void> | void = () => {};
   export let internetSearchProviderOption: (provider: string | undefined) => InternetSearchProviderOption = (provider) => ({
     id: provider || 'none',
     label: provider || 'No provider',
@@ -368,6 +371,25 @@
         <input class="h-10 w-full rounded-md border border-line bg-field px-3 text-sm disabled:opacity-50" bind:value={settingEmailConnectorTokenEnv} disabled={!settingEmailConnectorEnabled} placeholder="YEMAKA_EMAIL_CONNECTOR_TOKEN" />
         <div class="flex justify-end">
           <ActionButton variant="primary" icon="check" onclick={saveSettings}>Save Settings</ActionButton>
+        </div>
+        <div class="border-t border-line pt-3">
+          <SectionHeader
+            compact
+            icon="settings"
+            title="Runtime Control"
+            description="Restart after changing an API-key or connector environment variable. Yemaka stores only its environment-variable name, never the secret value."
+            className="mb-3"
+          />
+          {#if settingsRestartRequired}
+            <div class="mb-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              Restart recommended: the saved environment setting is read by a new runtime process.
+            </div>
+          {/if}
+          <div class="flex flex-wrap gap-2">
+            <ActionButton variant="secondary" icon="retry" onclick={requestRuntimeRestart}>Restart Yemaka</ActionButton>
+            <ActionButton variant="secondary" icon="stop" onclick={requestRuntimeShutdown}>Shut Down</ActionButton>
+          </div>
+          <p class="mt-2 text-xs text-slate-500">If you just added a secret to a terminal environment, start Yemaka again from that terminal after it is set.</p>
         </div>
       </div>
     </div>

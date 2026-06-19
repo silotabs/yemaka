@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"yemaka/internal/agent"
 	"yemaka/internal/config"
@@ -29,6 +30,47 @@ func TestLocalInstalledModelsExcludesCloudPlaceholders(t *testing.T) {
 	}
 	if local[0].Name != "ministral-3:3b" {
 		t.Fatalf("local model = %q", local[0].Name)
+	}
+}
+
+func TestDesktopRuntimeControlRestartsAndShutsDown(t *testing.T) {
+	app := NewApp()
+	app.ctx = context.Background()
+	quitCalls := make(chan struct{}, 2)
+	launched := false
+	app.restartLauncher = func(path string, args []string, dir string, env []string) error {
+		launched = path != "" && dir != "" && len(env) > 0
+		return nil
+	}
+	app.runtimeQuitter = func(context.Context) {
+		quitCalls <- struct{}{}
+	}
+
+	restart, err := app.RequestRestart()
+	if err != nil {
+		t.Fatalf("RequestRestart() error = %v", err)
+	}
+	if !restart.Accepted || restart.Action != "restart" || !launched {
+		t.Fatalf("restart result = %+v, launched=%t", restart, launched)
+	}
+	awaitDesktopQuit(t, quitCalls)
+
+	shutdown, err := app.RequestShutdown()
+	if err != nil {
+		t.Fatalf("RequestShutdown() error = %v", err)
+	}
+	if !shutdown.Accepted || shutdown.Action != "shutdown" {
+		t.Fatalf("shutdown result = %+v", shutdown)
+	}
+	awaitDesktopQuit(t, quitCalls)
+}
+
+func awaitDesktopQuit(t *testing.T, calls <-chan struct{}) {
+	t.Helper()
+	select {
+	case <-calls:
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for desktop quit")
 	}
 }
 

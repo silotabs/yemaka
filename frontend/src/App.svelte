@@ -98,6 +98,8 @@
   } from './lib/router';
   import {
     loadRuntimeSettingsSurface,
+    requestYemakaRestart,
+    requestYemakaShutdown,
   } from './lib/settingsActions';
   import { createSettingsController } from './lib/settingsController';
   import { normalizeResponseMode, settingsViewSupportsResponseMode } from './lib/settingsFormHelpers';
@@ -414,6 +416,7 @@
   let settingInternetSearchEndpoint = '';
   let settingInternetSearchAPIKeyEnv = '';
   let settingKnowledgeInfluenceEnabled = false;
+  let settingsRestartRequired = false;
   let composerEnabledSkills: Skill[] = [];
   let composerChatContextItems: ChatContextItem[] = [];
   let activeController: AbortController | null = null;
@@ -590,6 +593,27 @@
     return new Promise<boolean>((resolve) => {
       confirmDialogResolve = resolve;
     });
+  }
+
+  async function requestRuntimeRestart() {
+    if (!(await confirmYemaka('Restart Yemaka now? Any in-progress response or local action will stop.'))) return;
+    try {
+      const result = await requestYemakaRestart();
+      settingsRestartRequired = false;
+      notifySummary(result.message || 'Yemaka is restarting.', 'success');
+    } catch (err) {
+      notifyError(err instanceof Error ? err.message : String(err));
+    }
+  }
+
+  async function requestRuntimeShutdown() {
+    if (!(await confirmYemaka('Shut down Yemaka now? Any in-progress response or local action will stop.'))) return;
+    try {
+      const result = await requestYemakaShutdown();
+      notifySummary(result.message || 'Yemaka is shutting down.', 'success');
+    } catch (err) {
+      notifyError(err instanceof Error ? err.message : String(err));
+    }
   }
 
   function syncModelRoleForm() {
@@ -984,6 +1008,9 @@
       settings = value;
     },
     setSettingsSummary: notifySummary,
+    setSettingsRestartRequired: (value) => {
+      settingsRestartRequired = value;
+    },
     setEmbeddingIndexSummary: notifySummary,
     setEmbeddingIndexBusy: (value) => {
       embeddingIndexBusy = value;
@@ -2558,6 +2585,7 @@
         <SettingsPage
           {status}
           {settings}
+          {settingsRestartRequired}
           {connectorRegistry}
           {generatedConnectors}
           {internetStatus}
@@ -2595,6 +2623,8 @@
           {applyTheme}
           {indexEmbeddings}
           {saveSettings}
+          {requestRuntimeRestart}
+          {requestRuntimeShutdown}
           {internetSearchProviderOption}
           {onInternetSearchProviderChange}
           {internetSearchReadiness}

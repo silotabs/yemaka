@@ -90,7 +90,7 @@ scripts/install/install.sh --yes --type web --home /private/tmp/yemaka-install-q
 Windows:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/install/install.ps1 -Type web
+.\scripts\install\install.ps1 -Type web
 ```
 
 Confirm:

@@ -78,6 +78,48 @@ test('Response Mode settings are visible, persist, and keep local-first defaults
   await expect(page.getByLabel('Embeddings')).not.toBeChecked();
 });
 
+test('background settings refresh preserves an unsaved settings draft', async ({ page }) => {
+  await gotoApp(page, '/#/settings');
+
+  const fast = page.getByRole('button', { name: 'Fast' });
+  await expect(fast).toBeVisible();
+  await fast.click();
+  await expect(fast).toHaveAttribute('aria-pressed', 'true');
+
+  await page.evaluate(() => window.dispatchEvent(new Event('focus')));
+  await expect(fast).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByRole('button', { name: 'Balanced' })).toHaveAttribute('aria-pressed', 'false');
+});
+
+test('runtime restart warns before interrupting work and uses the guarded local endpoint', async ({ page }) => {
+  await gotoApp(page, '/#/settings');
+
+  await page.getByRole('button', { name: 'Restart Yemaka' }).click();
+  await expect(page.getByText(/Restart Yemaka now\? Any in-progress response or local action will stop/i)).toBeVisible();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await expect(page.getByText(/Yemaka is restarting/i)).toBeVisible();
+});
+
+test('composer expands additional enabled skills on demand', async ({ page }) => {
+  await gotoApp(page);
+
+  await page.getByTitle('Yemaka controls').click();
+  const moreSkills = page.getByRole('button', { name: /More skills/i });
+  await expect(moreSkills).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.getByText('Code Note Review')).not.toBeVisible();
+
+  await moreSkills.click();
+  await expect(moreSkills).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByText('Code Note Review')).toBeVisible();
+});
+
+test('sidebar local-profile settings shortcut opens Settings', async ({ page }) => {
+  await gotoApp(page);
+
+  await page.getByLabel('Open settings').click();
+  await expect(page.getByText('Runtime', { exact: true })).toBeVisible();
+});
+
 test('core beta pages load and expose trace/recovery/compaction diagnostics where available', async ({ page }) => {
   await gotoApp(page, '/#/memory');
   await expect(page.getByText(/Memory/i).first()).toBeVisible();
@@ -238,8 +280,9 @@ async function installMockAPI(page: Page) {
   });
 
   await page.route('**/api/**', async (route) => {
-    const url = new URL(route.request().url());
-    const method = route.request().method();
+    const request = route.request();
+    const url = new URL(request.url());
+    const method = request.method();
     const path = url.pathname;
     const requestBody = method === 'POST' ? postBody(route) : {};
 
@@ -251,6 +294,14 @@ async function installMockAPI(page: Page) {
     if (path === '/api/settings' && method === 'POST') {
       settings = mergeSettings(settings, requestBody);
       return json(route, settings);
+    }
+    if (path === '/api/runtime/restart' && method === 'POST') {
+      if (request.headers()['x-yemaka-runtime-control'] !== '1') return error(route, 403, 'runtime control request is required');
+      return json(route, { action: 'restart', accepted: true, message: 'Yemaka is restarting.' });
+    }
+    if (path === '/api/runtime/shutdown' && method === 'POST') {
+      if (request.headers()['x-yemaka-runtime-control'] !== '1') return error(route, 403, 'runtime control request is required');
+      return json(route, { action: 'shutdown', accepted: true, message: 'Yemaka is shutting down.' });
     }
     if (path === '/api/conversations') return json(route, Array.from(conversations.values()).map(conversationSummary));
     if (path.startsWith('/api/conversations/')) {
@@ -281,7 +332,7 @@ async function installMockAPI(page: Page) {
     if (path === '/api/extensions/failure-trends') return json(route, []);
     if (path === '/api/connectors') return json(route, []);
     if (path === '/api/connectors/generated') return json(route, []);
-    if (path === '/api/skills') return json(route, []);
+    if (path === '/api/skills') return json(route, mockSkills());
     if (path === '/api/domain-packs') return json(route, { installed: [], templates: [] });
     if (path === '/api/domain-packs/skills') return json(route, []);
     if (path === '/api/models') return json(route, []);
@@ -482,6 +533,29 @@ function memoryResults() {
   ];
 }
 
+function mockSkills() {
+  return [
+    'brief_writer',
+    'contract_review',
+    'meeting_notes',
+    'project_explainer',
+    'research_assistant',
+    'code_note_review',
+    'claim_check'
+  ].map((name) => ({
+    name,
+    version: '1.0.0',
+    description: 'Mock enabled skill',
+    triggers: [],
+    requiredTools: [],
+    enabled: true,
+    valid: true,
+    validationError: '',
+    source: 'test',
+    dir: `/skills/${name}`
+  }));
+}
+
 function knowledgeEntities() {
   return [
     {
@@ -540,5 +614,13 @@ async function json(route: Route, payload: unknown) {
     status: 200,
     contentType: 'application/json',
     body: JSON.stringify(payload)
+  });
+}
+
+async function error(route: Route, status: number, message: string) {
+  await route.fulfill({
+    status,
+    contentType: 'application/json',
+    body: JSON.stringify({ error: message })
   });
 }

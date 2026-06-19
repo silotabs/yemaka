@@ -198,6 +198,10 @@ export function RenameConversation(arg1:string,arg2:string):Promise<desktop.Conv
 
 export function RepairKnowledgeEvidence():Promise<desktop.KnowledgeRepairResult>;
 
+export function RequestRestart():Promise<server.RuntimeControlResult>;
+
+export function RequestShutdown():Promise<server.RuntimeControlResult>;
+
 export function ReviewDomainPack(arg1:string):Promise<domainpacks.PackReview>;
 
 export function ReviewDomainPackTemplate(arg1:string):Promise<domainpacks.PackReview>;

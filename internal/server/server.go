@@ -68,6 +68,13 @@ type Dependencies struct {
 	FrontendRoot   string
 	DevLog         io.Writer
 	NowTimeout     time.Duration
+	RuntimeControl func(action string) (RuntimeControlResult, error)
+}
+
+type RuntimeControlResult struct {
+	Action   string `json:"action"`
+	Accepted bool   `json:"accepted"`
+	Message  string `json:"message"`
 }
 
 type Server struct {
@@ -1033,6 +1040,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/setup", s.handleCompleteSetup)
 	mux.HandleFunc("GET /api/settings", s.handleSettings)
 	mux.HandleFunc("POST /api/settings", s.handleSaveSettings)
+	mux.HandleFunc("POST /api/runtime/restart", s.handleRuntimeRestart)
+	mux.HandleFunc("POST /api/runtime/shutdown", s.handleRuntimeShutdown)
 	mux.HandleFunc("GET /api/models", s.handleModels)
 	mux.HandleFunc("GET /api/models/show", s.handleShowModel)
 	mux.HandleFunc("POST /api/models/generate", s.handleGenerateModel)
@@ -1459,6 +1468,31 @@ func (s *Server) handleSaveSettings(w http.ResponseWriter, r *http.Request) {
 		s.deps.Cloud = nil
 	}
 	writeJSON(w, settingsView(s.deps.Config))
+}
+
+func (s *Server) handleRuntimeRestart(w http.ResponseWriter, r *http.Request) {
+	s.handleRuntimeControl(w, r, "restart")
+}
+
+func (s *Server) handleRuntimeShutdown(w http.ResponseWriter, r *http.Request) {
+	s.handleRuntimeControl(w, r, "shutdown")
+}
+
+func (s *Server) handleRuntimeControl(w http.ResponseWriter, r *http.Request, action string) {
+	if r.Header.Get("X-Yemaka-Runtime-Control") != "1" {
+		writeError(w, http.StatusForbidden, fmt.Errorf("runtime %s requires a Yemaka control request", action))
+		return
+	}
+	if s.deps.RuntimeControl == nil {
+		writeError(w, http.StatusNotImplemented, fmt.Errorf("runtime %s is not available for this Yemaka surface", action))
+		return
+	}
+	result, err := s.deps.RuntimeControl(action)
+	if err != nil {
+		writeError(w, http.StatusConflict, err)
+		return
+	}
+	writeJSON(w, result)
 }
 
 func readSettingsInput(r *http.Request) (SettingsInput, error) {

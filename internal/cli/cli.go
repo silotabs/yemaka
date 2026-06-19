@@ -9,10 +9,12 @@ import (
 	"io"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"yemaka/internal/agent"
@@ -58,6 +60,77 @@ type appContext struct {
 	runtimeFactory func(config.ModelConfig) (models.Runtime, error)
 	cloud          models.Runtime
 	router         *models.Router
+}
+
+type serveRuntimeControl struct {
+	mu              sync.Mutex
+	cancel          context.CancelFunc
+	restart         bool
+	restartLauncher func() error
+}
+
+func (c *serveRuntimeControl) Request(action string) (server.RuntimeControlResult, error) {
+	c.mu.Lock()
+	if c.cancel == nil {
+		c.mu.Unlock()
+		return server.RuntimeControlResult{}, fmt.Errorf("local server lifecycle is not active")
+	}
+	var message string
+	switch action {
+	case "restart":
+		launcher := c.restartLauncher
+		if launcher == nil {
+			c.mu.Unlock()
+			return server.RuntimeControlResult{}, fmt.Errorf("local server restart is not available")
+		}
+		c.mu.Unlock()
+		if err := launcher(); err != nil {
+			return server.RuntimeControlResult{}, fmt.Errorf("schedule local server restart: %w", err)
+		}
+		c.mu.Lock()
+		c.restart = true
+		message = "Yemaka is restarting. Reload this page in a moment."
+	case "shutdown":
+		message = "Yemaka local server is shutting down."
+	default:
+		c.mu.Unlock()
+		return server.RuntimeControlResult{}, fmt.Errorf("unknown runtime action %q", action)
+	}
+	cancel := c.cancel
+	c.mu.Unlock()
+
+	// Let the API response reach the browser before releasing the listener.
+	go func() {
+		time.Sleep(150 * time.Millisecond)
+		cancel()
+	}()
+	return server.RuntimeControlResult{Action: action, Accepted: true, Message: message}, nil
+}
+
+func (c *serveRuntimeControl) RestartRequested() bool {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.restart
+}
+
+func launchServeRestart(addr string) error {
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	dir, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	args := []string{"helper", "restart", "--addr", addr, "--"}
+	args = append(args, os.Args[1:]...)
+	command := exec.Command(executable, args...)
+	command.Dir = dir
+	command.Env = os.Environ()
+	command.Stdin = os.Stdin
+	command.Stdout = os.Stdout
+	command.Stderr = os.Stderr
+	return command.Start()
 }
 
 func Run(ctx context.Context, args []string, stdout io.Writer, stderr io.Writer) error {
@@ -191,10 +264,75 @@ func writerIsTerminal(w io.Writer) bool {
 }
 
 func runHelper(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer) error {
-	if len(args) != 1 || args[0] != "shell" {
-		return fmt.Errorf("usage: yemaka helper shell")
+	if len(args) == 1 && args[0] == "shell" {
+		return tools.RunShellHelper(ctx, stdin, stdout)
 	}
-	return tools.RunShellHelper(ctx, stdin, stdout)
+	if len(args) > 0 && args[0] == "restart" {
+		return runRestartHelper(ctx, args[1:], stdin, stdout)
+	}
+	return fmt.Errorf("usage: yemaka helper shell | restart --addr <loopback-address> -- <serve args>")
+}
+
+func runRestartHelper(ctx context.Context, args []string, stdin io.Reader, stdout io.Writer) error {
+	addr := server.DefaultAddr
+	separator := -1
+	for i := 0; i < len(args); i++ {
+		arg := args[i]
+		if arg == "--" {
+			separator = i
+			break
+		}
+		if arg == "--addr" {
+			if i+1 >= len(args) {
+				return fmt.Errorf("restart helper requires an address")
+			}
+			addr = args[i+1]
+			i++
+			continue
+		}
+		if strings.HasPrefix(arg, "--addr=") {
+			addr = strings.TrimPrefix(arg, "--addr=")
+			continue
+		}
+		return fmt.Errorf("unknown restart helper option %q", arg)
+	}
+	if separator < 0 || separator == len(args)-1 {
+		return fmt.Errorf("restart helper requires Yemaka command arguments")
+	}
+	if err := waitForServeAddress(ctx, addr); err != nil {
+		return err
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	command := exec.Command(executable, args[separator+1:]...)
+	command.Stdin = stdin
+	command.Stdout = stdout
+	command.Stderr = os.Stderr
+	command.Env = os.Environ()
+	return command.Start()
+}
+
+func waitForServeAddress(ctx context.Context, addr string) error {
+	deadline := time.NewTimer(15 * time.Second)
+	defer deadline.Stop()
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		listener, err := net.Listen("tcp", addr)
+		if err == nil {
+			_ = listener.Close()
+			return nil
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-deadline.C:
+			return fmt.Errorf("wait for Yemaka server restart on %s: %w", addr, err)
+		case <-ticker.C:
+		}
+	}
 }
 
 func runTUI(ctx context.Context, app *appContext, args []string, stdin io.Reader, stdout io.Writer) error {
@@ -254,6 +392,16 @@ func runServe(ctx context.Context, app *appContext, args []string, stdout io.Wri
 		frontendWatch = frontendWatchAvailable(staticDir)
 	}
 
+	fmt.Fprintf(stdout, "Yemaka local web: http://%s\n", addr)
+	fmt.Fprintln(stdout, "Serving the same local Go core. Press Ctrl+C to stop. Restart and shutdown are also available from Settings.\nUse `yemaka doctor` to check the setup and `yemaka --help` for advanced options.")
+	if frontendWatch {
+		fmt.Fprintln(stdout, "Frontend watch: on (rebuilds frontend/dist and refreshes the browser after frontend changes).")
+	}
+	serveCtx, cancel := context.WithCancel(ctx)
+	control := &serveRuntimeControl{
+		cancel:          cancel,
+		restartLauncher: func() error { return launchServeRestart(addr) },
+	}
 	localServer := server.New(server.Dependencies{
 		Config:         app.config,
 		Profile:        app.profile,
@@ -269,13 +417,17 @@ func runServe(ctx context.Context, app *appContext, args []string, stdout io.Wri
 		FrontendWatch:  frontendWatch,
 		FrontendRoot:   frontendRootForStatic(staticDir),
 		DevLog:         stdout,
+		RuntimeControl: control.Request,
 	})
-	fmt.Fprintf(stdout, "Yemaka local web: http://%s\n", addr)
-	fmt.Fprintln(stdout, "Serving the same local Go core. Press Ctrl+C to stop.\nUse `yemaka doctor` to check the setup and `yemaka --help` for advanced options.")
-	if frontendWatch {
-		fmt.Fprintln(stdout, "Frontend watch: on (rebuilds frontend/dist and refreshes the browser after frontend changes).")
+	err := localServer.ListenAndServe(serveCtx, addr)
+	cancel()
+	if err != nil {
+		return err
 	}
-	return localServer.ListenAndServe(ctx, addr)
+	if control.RestartRequested() {
+		fmt.Fprintln(stdout, "Yemaka restart handed off to a fresh local process.")
+	}
+	return nil
 }
 
 func serveUsage() string {

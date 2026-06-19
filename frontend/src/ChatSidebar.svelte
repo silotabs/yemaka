@@ -38,6 +38,10 @@
   export let exportSidebarConversationJSON: (conversation: ConversationSession) => Promise<void> | void = () => {};
   export let deleteConversationById: (id: string) => Promise<void> | void = () => {};
   export let promptTitle: (value: string) => string = (value) => value;
+
+  function openSettings() {
+    void selectTab('settings');
+  }
 </script>
 
 {#if sidebarVisible}
@@ -223,8 +227,20 @@
       <div class="flex items-center gap-3 border border-pine/20 p-3 rounded-xl bg-pine/5">
         <div class="yemaka-mark"><YemakaIcon size={25} strokeWidth={1.35} decorative /></div>
         <div class="min-w-0">
-          <div class="font-medium text-ink">Local profile</div>
-          <div class="truncate">Model: {status?.selectedModel || status?.lowMemoryModel || 'not loaded'}</div>
+          <div class="mb-1 flex items-center justify-between gap-2">
+            <span class="font-medium text-ink">Local profile</span>
+            <button
+              class="profile-settings-button"
+              type="button"
+              title="Open settings"
+              aria-label="Open settings"
+              aria-current={activeTab === 'settings' ? 'page' : undefined}
+              onclick={openSettings}
+            >
+              <Icon name="settings" size={16} />
+            </button>
+          </div>
+          <div class="truncate text-sm">Model: {status?.selectedModel || status?.lowMemoryModel || 'not loaded'}</div>
         </div>
       </div>
     </div>
@@ -290,8 +306,18 @@
         title={`${status?.modelReady ? 'Model ready' : 'Setup needed'} | ${status?.lowMemoryMode ? 'low memory' : 'standard'}`}
       ></span>
       <span class="rail-mode text-sm" title={status?.lowMemoryMode ? 'low memory' : 'standard'}>{status?.lowMemoryMode ? 'L' : 'S'}</span>
-      <div class="rail-avatar">
-        <Icon name="spark" size={20} />
+      <button
+        class={`rail-button rounded-xl ${activeTab === 'settings' ? 'rail-button-active' : ''}`}
+        type="button"
+        title="Open settings"
+        aria-label="Open settings"
+        aria-current={activeTab === 'settings' ? 'page' : undefined}
+        onclick={openSettings}
+      >
+        <Icon name="settings" size={16} />
+      </button>
+      <div class="yemaka-mark">
+        <YemakaIcon size={25} strokeWidth={1.35} decorative />
       </div>
     </div>
   </aside>

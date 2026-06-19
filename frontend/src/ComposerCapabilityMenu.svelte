@@ -39,6 +39,8 @@
   $: activeContextCount = chatContextItems.filter((item) => item.tone === 'ok' || item.tone === 'warn').length;
   $: primarySkills = enabledSkills.slice(0, 5);
   $: moreSkills = enabledSkills.slice(5);
+  let moreSkillsOpen = false;
+  $: if (!composerMenuOpen) moreSkillsOpen = false;
 </script>
 
 <DropdownMenu.Root bind:open={composerMenuOpen}>
@@ -61,21 +63,38 @@
         </DropdownMenu.Item>
       {/each}
       {#if moreSkills.length}
-        <div class="composer-menu-label composer-menu-label-subtle">More skills</div>
-        <ScrollArea.Root class="composer-skill-scroll" type="auto">
-          <ScrollArea.Viewport class="composer-skill-scroll-viewport">
-            {#each moreSkills as skill}
-              <DropdownMenu.Item class={`composer-menu-item ${selectedSkill === skill.name ? 'is-selected' : ''}`} onSelect={() => (selectedSkill = skill.name)}>
-                <span class="composer-menu-check">{selectedSkill === skill.name ? '✓' : ''}</span>
-                <Icon name="skills" size={15} />
-                <span title={skill.name}>{skillDisplayLabel(skill.name)}</span>
-              </DropdownMenu.Item>
-            {/each}
-          </ScrollArea.Viewport>
-          <ScrollArea.Scrollbar class="composer-skill-scrollbar" orientation="vertical">
-            <ScrollArea.Thumb class="composer-skill-thumb" />
-          </ScrollArea.Scrollbar>
-        </ScrollArea.Root>
+        <button
+          class="composer-more-skills-trigger"
+          type="button"
+          aria-expanded={moreSkillsOpen}
+          aria-controls="composer-more-skills"
+          onclick={(event) => {
+            event.stopPropagation();
+            moreSkillsOpen = !moreSkillsOpen;
+          }}
+        >
+          <span>More skills</span>
+          <span class="composer-route-summary">{moreSkills.length}</span>
+          <Icon name="chevron" size={14} />
+        </button>
+        {#if moreSkillsOpen}
+          <div id="composer-more-skills">
+            <ScrollArea.Root class="composer-skill-scroll" type="auto">
+              <ScrollArea.Viewport class="composer-skill-scroll-viewport">
+                {#each moreSkills as skill}
+                  <DropdownMenu.Item class={`composer-menu-item ${selectedSkill === skill.name ? 'is-selected' : ''}`} onSelect={() => (selectedSkill = skill.name)}>
+                    <span class="composer-menu-check">{selectedSkill === skill.name ? '✓' : ''}</span>
+                    <Icon name="skills" size={15} />
+                    <span title={skill.name}>{skillDisplayLabel(skill.name)}</span>
+                  </DropdownMenu.Item>
+                {/each}
+              </ScrollArea.Viewport>
+              <ScrollArea.Scrollbar class="composer-skill-scrollbar" orientation="vertical">
+                <ScrollArea.Thumb class="composer-skill-thumb" />
+              </ScrollArea.Scrollbar>
+            </ScrollArea.Root>
+          </div>
+        {/if}
       {/if}
 
       <DropdownMenu.Separator class="chat-menu-divider" />

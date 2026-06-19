@@ -1,9 +1,11 @@
 package cli
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"yemaka/internal/config"
 )
@@ -50,5 +52,31 @@ func TestDefaultServeStaticDirPrefersDevelopmentBundle(t *testing.T) {
 
 	if got := defaultServeStaticDir(); got != "frontend/dist" {
 		t.Fatalf("defaultServeStaticDir() = %q, want development frontend/dist", got)
+	}
+}
+
+func TestServeRuntimeControlRestartsThroughHandoff(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	launched := false
+	control := &serveRuntimeControl{
+		cancel: cancel,
+		restartLauncher: func() error {
+			launched = true
+			return nil
+		},
+	}
+
+	result, err := control.Request("restart")
+	if err != nil {
+		t.Fatalf("Request(restart) error = %v", err)
+	}
+	if !result.Accepted || result.Action != "restart" || !launched || !control.RestartRequested() {
+		t.Fatalf("restart result = %+v, launched=%t requested=%t", result, launched, control.RestartRequested())
+	}
+	select {
+	case <-ctx.Done():
+	case <-time.After(time.Second):
+		t.Fatal("restart did not release the server lifecycle")
 	}
 }

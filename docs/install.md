@@ -50,7 +50,17 @@ scripts/install/install.sh
 Windows PowerShell:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/install/install.ps1
+.\scripts\install\install.ps1
+```
+
+Run this from the Yemaka source folder. Most personal Windows installations
+allow a local script to run directly. On a managed device with a restrictive
+execution policy, PowerShell blocks the script before the installer can start.
+Use this per-command fallback in that case; it does not change the machine
+policy:
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install\install.ps1
 ```
 
 After installation:
@@ -90,6 +100,12 @@ When installing from source, Yemaka builds the local app binary on your machine.
 The first build can take a minute because Go may compile the SQLite driver and
 other local runtime packages. The installer shows progress and writes details
 to the install log.
+
+For a web install with no existing `frontend/dist`, the installer checks for
+the locked frontend dependencies first. If they are missing, it runs
+`npm --prefix frontend ci` before building the web assets. This may require
+network access to the configured npm registry; it does not enable Yemaka's own
+internet/search feature.
 
 The installer also writes a user-local install receipt. The receipt records the
 Yemaka home, command shim directory, installed binary, install type, and latest

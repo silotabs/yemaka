@@ -58,6 +58,14 @@ export async function httpCall<T>(name: string, ...args: unknown[]): Promise<T> 
       path = '/api/settings';
       init = jsonPost(args[0] ?? {});
       break;
+    case 'RequestRestart':
+      path = '/api/runtime/restart';
+      init = runtimeControlPost();
+      break;
+    case 'RequestShutdown':
+      path = '/api/runtime/shutdown';
+      init = runtimeControlPost();
+      break;
     case 'ListSkills':
       path = '/api/skills';
       break;
@@ -565,6 +573,17 @@ export function jsonPost(body: unknown): RequestInit {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
+  };
+}
+
+function runtimeControlPost(): RequestInit {
+  return {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'X-Yemaka-Runtime-Control': '1'
+    },
+    body: '{}'
   };
 }
 

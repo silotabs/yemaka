@@ -78,8 +78,8 @@
         }))}
       />
       <div class="mb-4 grid gap-2 text-sm md:grid-cols-2">
-        <div class="rounded-md border border-line px-3 py-2">Config: {setupState.configPath}</div>
-        <div class="rounded-md border border-line px-3 py-2">Profile: {setupState.profilePath}</div>
+        <div class="rounded-md border border-line px-3 py-2 overflow-auto">Config: {setupState.configPath}</div>
+        <div class="rounded-md border border-line px-3 py-2 overflow-auto">Profile: {setupState.profilePath}</div>
       </div>
       <div class="flex justify-end gap-2">
         <ActionButton variant="secondary" icon="retry" onclick={refresh}>Recheck</ActionButton>

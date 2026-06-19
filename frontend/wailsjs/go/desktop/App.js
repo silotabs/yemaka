@@ -366,6 +366,14 @@ export function RepairKnowledgeEvidence() {
   return window['go']['desktop']['App']['RepairKnowledgeEvidence']();
 }
 
+export function RequestRestart() {
+  return window['go']['desktop']['App']['RequestRestart']();
+}
+
+export function RequestShutdown() {
+  return window['go']['desktop']['App']['RequestShutdown']();
+}
+
 export function ReviewDomainPack(arg1) {
   return window['go']['desktop']['App']['ReviewDomainPack'](arg1);
 }

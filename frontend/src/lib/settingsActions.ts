@@ -7,6 +7,12 @@ export type RuntimeSettingsSurface = {
   settings: SettingsView;
 };
 
+export type RuntimeControlResult = {
+  action: 'restart' | 'shutdown';
+  accepted: boolean;
+  message: string;
+};
+
 export type SettingsSaveInput = {
   lowMemoryMode: boolean;
   maxContextTokens: number;
@@ -80,6 +86,14 @@ export async function completeFirstRunSetup(input: SetupCompleteInput) {
 
 export async function indexEmbeddingChunks() {
   return await call<EmbeddingIndexSummary>('IndexEmbeddings');
+}
+
+export async function requestYemakaRestart() {
+  return await call<RuntimeControlResult>('RequestRestart');
+}
+
+export async function requestYemakaShutdown() {
+  return await call<RuntimeControlResult>('RequestShutdown');
 }
 
 export function embeddingIndexSummaryText(result: EmbeddingIndexSummary) {
