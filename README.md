@@ -1,7 +1,7 @@
 # Yemaka
 
 <p align="center">
-  <img src="docs/Yemaka-Logo.png" alt="Yemaka logo" width="112" />
+  <img src="frontend/public/yemaka.png" alt="Yemaka logo" width="112" />
 </p>
 
 <p align="center">
